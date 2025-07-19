@@ -17,6 +17,20 @@ A command-line tool for managing Model Context Protocol (MCP) servers on your sy
 - **Go 1.21+** - For building the tool
 - **nano** (preferred) or any text editor
 
+## Supported Operating Systems
+
+- **macOS** (Intel and Apple Silicon)
+  - Full support including Homebrew integration
+  - Tested on macOS 12+ (Monterey and later)
+  
+- **Linux** (x86_64 and ARM64)
+  - Ubuntu, Debian, Fedora, Arch, and other major distributions
+  - Requires standard Unix tools (bash, grep, etc.)
+  
+- **Windows** - Not currently supported
+  - The tool relies on Unix shell scripts and Claude CLI
+  - Windows users can use WSL2 (Windows Subsystem for Linux)
+
 ## Installation
 
 ```bash
@@ -24,12 +38,28 @@ A command-line tool for managing Model Context Protocol (MCP) servers on your sy
 git clone <repository-url>
 cd global-cli
 
-# Install automatically (includes shell completion)
+# Install or upgrade (automatically detects existing installation)
 ./install.sh
 
-# To uninstall later
+# To uninstall completely
 ./uninstall.sh
 ```
+
+### Installation Scripts
+
+- **`./install.sh`** - Install or upgrade cmcp
+  - Automatically detects if this is a fresh install or upgrade
+  - Builds and installs the binary to `/usr/local/bin`
+  - Sets up shell completions for your shell
+  - **Always preserves existing server configurations**
+  - For upgrades: shows version info and offers to stop running servers
+  - For fresh installs: creates the configuration directory `~/.cmcp`
+
+- **`./uninstall.sh`** - Remove cmcp from your system
+  - Removes the cmcp binary
+  - Removes shell completions
+  - Optionally removes configuration (asks for confirmation)
+  - If you keep the configuration, you can reinstall later and retain all server settings
 
 ## Usage
 
@@ -93,16 +123,19 @@ Edit your config file to add servers like these:
       "command": "npx",
       "args": ["@playwright/mcp@latest"]
     },
+    "filesystem": {
+      "command": "npx",
+      "args": ["@claude/mcp-server-filesystem"],
+      "env": {
+        "ALLOWED_DIRECTORIES": "/home/user/documents,/home/user/projects"
+      }
+    },
     "github": {
-      "command": "npx", 
+      "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
         "GITHUB_TOKEN": "ghp_your_token_here"
       }
-    },
-    "filesystem": {
-      "command": "npx",
-      "args": ["@claude/mcp-server-filesystem"]
     },
     "sqlite": {
       "command": "npx",
@@ -162,8 +195,6 @@ Configuration is stored in `~/.cmcp/config.json` using the **standard MCP format
 - ✅ Can copy servers between cmcp and Claude
 - ✅ Edit config file manually for advanced setups
 - ✅ Industry standard MCP configuration
-
-See `example-config.json` for more examples with real MCP servers.
 
 ## Testing
 

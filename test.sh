@@ -12,7 +12,7 @@ if command -v podman >/dev/null 2>&1; then
 
     # Build the test image
     echo "Building test image..."
-    podman build -f Dockerfile.test -t cmcp-test .
+    podman build -f tests/Dockerfile.test -t cmcp-test .
 
     if [ $? -ne 0 ]; then
         echo "❌ Failed to build test image"
@@ -39,7 +39,12 @@ if command -v podman >/dev/null 2>&1; then
             sed 's|\\\\./cmcp|/tmp/cmcp|g; s|set -e|set +e|g' /app/tests/test-comprehensive.sh > /tmp/test-comprehensive.sh &&
             chmod +x /tmp/tests/mock-mcp-server.sh &&
             chmod +x /tmp/test-comprehensive.sh &&
-            /tmp/test-comprehensive.sh
+            chmod +x /tmp/tests/test-install-scripts.sh &&
+            echo '=== Running Comprehensive Tests ===' &&
+            /tmp/test-comprehensive.sh &&
+            echo '' &&
+            echo '=== Running Install/Uninstall Tests ===' &&
+            /tmp/tests/test-install-scripts.sh
         "
 elif command -v docker >/dev/null 2>&1; then
     echo "Using Docker"
@@ -48,13 +53,13 @@ elif command -v docker >/dev/null 2>&1; then
     echo ""
 
     # Build and run tests
-    docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --force-recreate
+    docker-compose -f tests/docker-compose.test.yml up --build --abort-on-container-exit --force-recreate
 
     # Get exit code
     EXIT_CODE=$?
 
     # Clean up
-    docker-compose -f docker-compose.test.yml down
+    docker-compose -f tests/docker-compose.test.yml down
     exit $EXIT_CODE
 else
     echo "❌ Error: Neither Podman nor Docker found"

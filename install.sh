@@ -2,10 +2,42 @@
 
 set -e
 
+# Detect if this is an upgrade or fresh install
+IS_UPGRADE=false
+if command -v cmcp >/dev/null 2>&1; then
+    IS_UPGRADE=true
+    echo "🔄 Detected existing cmcp installation"
+    CURRENT_VERSION=$(cmcp help | head -1 || echo "Unknown version")
+    echo "   Current: $CURRENT_VERSION"
+    echo ""
+    
+    # Check for running servers if upgrading
+    RUNNING_SERVERS=$(cmcp online 2>/dev/null | grep -v "No servers" | grep -v "No MCP servers" || true)
+    if [[ -n "$RUNNING_SERVERS" ]]; then
+        echo "⚠️  Found running MCP servers"
+        echo "   It's recommended to stop them before upgrading"
+        read -p "   Stop all running servers? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "   Stopping servers..."
+            cmcp reset <<< "y" >/dev/null 2>&1 || true
+            echo "   ✅ Servers stopped"
+        fi
+    fi
+    echo ""
+else
+    echo "🚀 Installing cmcp..."
+fi
+
 echo "Building cmcp..."
 go build -o cmcp
 
+echo ""
 echo "Installing cmcp to /usr/local/bin..."
+echo "⚠️  Root permission required to:"
+echo "   • Install the cmcp binary to /usr/local/bin (system-wide access)"
+echo "   • Set up shell completions in system directories"
+echo ""
 sudo cp cmcp /usr/local/bin/
 
 echo "Setting up shell completion..."
@@ -64,6 +96,21 @@ else
 fi
 
 echo ""
-echo "✅ cmcp installed successfully!"
-echo "🔄 Restart your terminal to enable tab completion"
-echo "🚀 Run 'cmcp --help' to get started"
+if [[ "$IS_UPGRADE" == "true" ]]; then
+    echo "✅ cmcp upgraded successfully!"
+    NEW_VERSION=$(cmcp help | head -1 || echo "Unknown version")
+    echo "   New: $NEW_VERSION"
+else
+    echo "✅ cmcp installed successfully!"
+fi
+echo "🔄 Restart your terminal to ensure tab completion works"
+
+# Check if existing config exists
+if [[ -f ~/.cmcp/config.json ]]; then
+    SERVER_COUNT=$(jq -r '.mcpServers | length' ~/.cmcp/config.json 2>/dev/null || echo "0")
+    echo ""
+    echo "📁 Configuration preserved: $SERVER_COUNT server(s) available"
+    echo "   Run 'cmcp config list' to see your servers"
+elif [[ "$IS_UPGRADE" == "false" ]]; then
+    echo "🚀 Run 'cmcp --help' to get started"
+fi

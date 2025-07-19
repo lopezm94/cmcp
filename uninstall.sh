@@ -3,6 +3,11 @@
 set -e
 
 echo "Uninstalling cmcp..."
+echo ""
+echo "⚠️  Root permission will be required to:"
+echo "   • Remove the cmcp binary from /usr/local/bin"
+echo "   • Remove shell completions from system directories"
+echo ""
 
 # Remove binary
 if [[ -f "/usr/local/bin/cmcp" ]]; then

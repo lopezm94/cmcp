@@ -293,7 +293,32 @@ else
     test_fail "Open command" "Unexpected error: $OUTPUT"
 fi
 
-# Test 17: Complex configuration test
+# Test 17: JSON formatting after config open
+test_start "JSON formatting after config open"
+# Create a poorly formatted config file
+cat > ~/.cmcp/config.json << 'EOF'
+{"mcpServers":{"test-server":{"command":"test","args":["arg1","arg2"]},"another-server":{"command":"another","env":{"KEY":"value"}}}}
+EOF
+
+# Run config open with non-interactive editor
+OUTPUT=$(EDITOR=true ./cmcp config open 2>&1)
+if [[ "$OUTPUT" == *"Config file reformatted successfully"* ]]; then
+    # Check if JSON is properly formatted
+    if cat ~/.cmcp/config.json | jq . >/dev/null 2>&1; then
+        # Check indentation by looking for spaces
+        if grep -q "^  " ~/.cmcp/config.json; then
+            test_pass "Config file properly formatted after editing"
+        else
+            test_fail "JSON formatting" "File is valid JSON but not indented"
+        fi
+    else
+        test_fail "JSON formatting" "Invalid JSON after formatting"
+    fi
+else
+    test_fail "JSON formatting" "Formatting message not shown: $OUTPUT"
+fi
+
+# Test 18: Complex configuration test
 test_start "Complex configuration with all features"
 # Create complex config directly
 cat > ~/.cmcp/config.json << 'EOF'
@@ -323,7 +348,7 @@ else
     cat ~/.cmcp/config.json | jq '.mcpServers."complex-server"'
 fi
 
-# Test 18: Remove server
+# Test 19: Remove server
 test_start "Remove server from config"
 if timeout 10 expect -c '
     set timeout 5
@@ -339,7 +364,7 @@ else
     test_fail "Remove server" "Failed to remove server"
 fi
 
-# Test 19: Shell completion generation
+# Test 20: Shell completion generation
 test_start "Shell completion generation"
 if ./cmcp completion bash >/dev/null 2>&1 && ./cmcp completion zsh >/dev/null 2>&1; then
     test_pass "Shell completion generation works"
@@ -347,7 +372,7 @@ else
     test_fail "Completion generation" "Failed to generate completions"
 fi
 
-# Test 20: Final configuration file verification
+# Test 21: Final configuration file verification
 test_start "Final configuration file structure"
 if verify_json_structure ~/.cmcp/config.json "Final config"; then
     echo "  Final config structure:"

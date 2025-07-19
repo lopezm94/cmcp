@@ -111,7 +111,23 @@ var configOpenCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Opening config file...\n")
-		return openInEditor(configPath, "")
+		if err := openInEditor(configPath, ""); err != nil {
+			return err
+		}
+
+		// After editing, reload and reformat the JSON file
+		cfg, err := config.Load()
+		if err != nil {
+			return fmt.Errorf("failed to reload config after editing: %w", err)
+		}
+
+		// Save the config to ensure proper formatting
+		if err := config.Save(cfg); err != nil {
+			return fmt.Errorf("failed to reformat config: %w", err)
+		}
+
+		fmt.Printf("Config file reformatted successfully.\n")
+		return nil
 	},
 }
 

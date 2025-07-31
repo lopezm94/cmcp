@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	manager = mcp.NewManager()
+	builder = mcp.NewClaudeCmdBuilder()
 	verbose bool
 	dryRun  bool
 )
@@ -36,7 +36,7 @@ var startCmd = &cobra.Command{
 		var serverLabels []string
 
 		for name := range cfg.MCPServers {
-			if !manager.IsRunning(name) {
+			if !builder.IsRunning(name) {
 				availableServers = append(availableServers, name)
 				serverLabels = append(serverLabels, name)
 			}
@@ -71,7 +71,7 @@ var startCmd = &cobra.Command{
 			
 			for _, serverName := range selectedServers {
 				selectedServer, _ := cfg.FindServer(serverName)
-				command := manager.BuildStartCommand(serverName, selectedServer)
+				command := builder.BuildStartCommand(serverName, selectedServer)
 				fmt.Printf("$ %s\n", command)
 			}
 			return nil
@@ -88,7 +88,7 @@ var startCmd = &cobra.Command{
 			selectedServer, _ := cfg.FindServer(serverName)
 			cyan.Printf("Starting server '%s'...\n", serverName)
 			
-			if err := manager.StartServer(serverName, selectedServer, verbose); err != nil {
+			if err := builder.StartServer(serverName, selectedServer, verbose); err != nil {
 				errors = append(errors, fmt.Errorf("failed to start '%s': %w", serverName, err))
 			} else {
 				started = append(started, serverName)

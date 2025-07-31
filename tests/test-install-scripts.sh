@@ -157,7 +157,7 @@ EOF
         mv "${CMCP_TMP}.tmp2" "$CMCP_TMP" 2>/dev/null || true
     fi
     
-    if [[ "$OUTPUT" == *"Existing configuration found: 2 server(s) preserved"* ]]; then
+    if [[ "$OUTPUT" == *"Configuration preserved: 2 server(s) available"* ]]; then
         # Verify config still exists
         if [[ -f "$TEST_HOME/.cmcp/config.json" ]]; then
             SERVER_COUNT=$(jq -r '.mcpServers | length' "$TEST_HOME/.cmcp/config.json")

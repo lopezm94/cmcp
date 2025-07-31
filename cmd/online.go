@@ -22,7 +22,7 @@ var onlineCmd = &cobra.Command{
 			yellow := color.New(color.FgYellow)
 			yellow.Println("Would execute the following command:")
 			fmt.Println()
-			fmt.Printf("$ %s\n", manager.BuildListCommand())
+			fmt.Printf("$ %s\n", builder.BuildListCommand())
 			return nil
 		}
 		

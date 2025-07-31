@@ -25,7 +25,7 @@ var resetCmd = &cobra.Command{
 		// Find which servers from our config are actually running in Claude
 		var runningServers []string
 		for name := range cfg.MCPServers {
-			if manager.IsRunning(name) {
+			if builder.IsRunning(name) {
 				runningServers = append(runningServers, name)
 			}
 		}
@@ -46,9 +46,10 @@ var resetCmd = &cobra.Command{
 			yellow.Println("\nWould execute the following commands:")
 			fmt.Println()
 			
-			for _, name := range runningServers {
-				command := manager.BuildStopCommand(name)
-				fmt.Printf("$ %s\n", command)
+			// Build commands for all running servers
+			commands := builder.BuildResetCommands(runningServers)
+			for _, cmd := range commands {
+				fmt.Printf("$ %s\n", cmd)
 			}
 			return nil
 		}
@@ -64,7 +65,7 @@ var resetCmd = &cobra.Command{
 		}
 
 		color.Cyan("Stopping all servers...")
-		if err := manager.StopAllServers(); err != nil {
+		if err := builder.StopAllServers(); err != nil {
 			return fmt.Errorf("failed to stop servers: %w", err)
 		}
 

@@ -9,12 +9,12 @@ import (
 	"cmcp/internal/config"
 )
 
-type Manager struct {
-	// No need to track servers - Claude manages them
+type ClaudeCmdBuilder struct {
+	// Builder for Claude CLI commands
 }
 
-func NewManager() *Manager {
-	return &Manager{}
+func NewClaudeCmdBuilder() *ClaudeCmdBuilder {
+	return &ClaudeCmdBuilder{}
 }
 
 // findClaude returns the claude command path
@@ -25,13 +25,13 @@ func findClaude() string {
 	return "claude" // fallback
 }
 
-func (m *Manager) StartServer(name string, server *config.MCPServer, verbose bool) error {
+func (b *ClaudeCmdBuilder) StartServer(name string, server *config.MCPServer, verbose bool) error {
 	// Build the command args
-	args := m.buildStartArgs(name, server)
+	args := b.buildStartArgs(name, server)
 	
 	// Show command if verbose
 	if verbose {
-		commandStr := m.BuildStartCommand(name, server)
+		commandStr := b.BuildStartCommand(name, server)
 		fmt.Printf("  Command: %s\n", commandStr)
 	}
 	
@@ -49,7 +49,7 @@ func (m *Manager) StartServer(name string, server *config.MCPServer, verbose boo
 	if err != nil {
 		// On error, show the full command and stderr
 		if !verbose {
-			commandStr := m.BuildStartCommand(name, server)
+			commandStr := b.BuildStartCommand(name, server)
 			fmt.Printf("  Command failed: %s\n", commandStr)
 		}
 		if stderr.Len() > 0 {
@@ -80,14 +80,14 @@ func (m *Manager) StartServer(name string, server *config.MCPServer, verbose boo
 	return nil
 }
 
-func (m *Manager) StopServer(name string, verbose bool) error {
+func (b *ClaudeCmdBuilder) StopServer(name string, verbose bool) error {
 	// First check if server exists in Claude
-	if !m.IsRunning(name) {
+	if !b.IsRunning(name) {
 		return fmt.Errorf("server '%s' is not registered in Claude", name)
 	}
 
 	// Build the command
-	commandStr := m.BuildStopCommand(name)
+	commandStr := b.BuildStopCommand(name)
 	args := []string{"mcp", "remove", name}
 	
 	// Show command if verbose
@@ -139,13 +139,13 @@ func (m *Manager) StopServer(name string, verbose bool) error {
 	return nil
 }
 
-func (m *Manager) GetRunningServers() []string {
+func (b *ClaudeCmdBuilder) GetRunningServers() []string {
 	// This method is no longer used since we delegate to claude mcp list
 	// Keeping for backward compatibility but returns empty
 	return []string{}
 }
 
-func (m *Manager) StopAllServers() error {
+func (b *ClaudeCmdBuilder) StopAllServers() error {
 	// Get list of servers from config to remove them all
 	cfg, err := config.Load()
 	if err != nil {
@@ -155,9 +155,9 @@ func (m *Manager) StopAllServers() error {
 	var errors []error
 	for name := range cfg.MCPServers {
 		// Check if this server is in Claude before trying to remove
-		if m.IsRunning(name) {
+		if b.IsRunning(name) {
 			// Use StopServer with verbose=false for reset command
-			if err := m.StopServer(name, false); err != nil {
+			if err := b.StopServer(name, false); err != nil {
 				errors = append(errors, err)
 			}
 		}
@@ -169,7 +169,7 @@ func (m *Manager) StopAllServers() error {
 	return nil
 }
 
-func (m *Manager) IsRunning(name string) bool {
+func (b *ClaudeCmdBuilder) IsRunning(name string) bool {
 	// Check if server is registered in Claude by running claude mcp get
 	cmd := exec.Command(findClaude(), "mcp", "get", name)
 	// Suppress output
@@ -181,7 +181,7 @@ func (m *Manager) IsRunning(name string) bool {
 }
 
 // buildStartArgs constructs the arguments for starting a server
-func (m *Manager) buildStartArgs(name string, server *config.MCPServer) []string {
+func (b *ClaudeCmdBuilder) buildStartArgs(name string, server *config.MCPServer) []string {
 	// Build the claude mcp add command
 	args := []string{"mcp", "add", name}
 	
@@ -201,17 +201,26 @@ func (m *Manager) buildStartArgs(name string, server *config.MCPServer) []string
 }
 
 // BuildStartCommand constructs the command to start a server without executing it
-func (m *Manager) BuildStartCommand(name string, server *config.MCPServer) string {
-	args := m.buildStartArgs(name, server)
+func (b *ClaudeCmdBuilder) BuildStartCommand(name string, server *config.MCPServer) string {
+	args := b.buildStartArgs(name, server)
 	return fmt.Sprintf("claude %s", strings.Join(args, " "))
 }
 
 // BuildStopCommand constructs the command to stop a server without executing it
-func (m *Manager) BuildStopCommand(name string) string {
+func (b *ClaudeCmdBuilder) BuildStopCommand(name string) string {
 	return fmt.Sprintf("claude mcp remove %s", name)
 }
 
 // BuildListCommand constructs the command to list servers without executing it
-func (m *Manager) BuildListCommand() string {
+func (b *ClaudeCmdBuilder) BuildListCommand() string {
 	return "claude mcp list"
+}
+
+// BuildResetCommands constructs the commands to remove multiple servers without executing them
+func (b *ClaudeCmdBuilder) BuildResetCommands(serverNames []string) []string {
+	var commands []string
+	for _, name := range serverNames {
+		commands = append(commands, b.BuildStopCommand(name))
+	}
+	return commands
 }

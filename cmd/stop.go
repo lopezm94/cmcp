@@ -29,7 +29,7 @@ var stopCmd = &cobra.Command{
 		// Find which servers from our config are in Claude
 		var runningServers []string
 		for name := range cfg.MCPServers {
-			if manager.IsRunning(name) {
+			if builder.IsRunning(name) {
 				runningServers = append(runningServers, name)
 			}
 		}
@@ -67,7 +67,7 @@ var stopCmd = &cobra.Command{
 			fmt.Println()
 			
 			for _, serverName := range selectedServers {
-				command := manager.BuildStopCommand(serverName)
+				command := builder.BuildStopCommand(serverName)
 				fmt.Printf("$ %s\n", command)
 			}
 			return nil
@@ -83,7 +83,7 @@ var stopCmd = &cobra.Command{
 		for _, serverName := range selectedServers {
 			cyan.Printf("Stopping server '%s'...\n", serverName)
 			
-			if err := manager.StopServer(serverName, stopVerbose); err != nil {
+			if err := builder.StopServer(serverName, stopVerbose); err != nil {
 				errors = append(errors, fmt.Errorf("failed to stop '%s': %w", serverName, err))
 			} else {
 				stopped = append(stopped, serverName)

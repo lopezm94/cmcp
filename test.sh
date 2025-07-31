@@ -36,7 +36,7 @@ if command -v podman >/dev/null 2>&1; then
             cd /tmp &&
             cp -r /app/tests . &&
             # Replace ./cmcp with /tmp/cmcp and disable set -e in test script
-            sed 's|\\\\./cmcp|/tmp/cmcp|g; s|set -e|set +e|g' /app/tests/test-comprehensive.sh > /tmp/test-comprehensive.sh &&
+            sed 's|\./cmcp|/tmp/cmcp|g; s|set -e|set +e|g' /app/tests/test-comprehensive.sh > /tmp/test-comprehensive.sh &&
             chmod +x /tmp/tests/mock-mcp-server.sh &&
             chmod +x /tmp/test-comprehensive.sh &&
             chmod +x /tmp/tests/test-install-scripts.sh &&

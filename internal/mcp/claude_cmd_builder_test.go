@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildStartCommand(t *testing.T) {
-	m := NewManager()
+	b := NewClaudeCmdBuilder()
 
 	tests := []struct {
 		name     string
@@ -57,7 +57,7 @@ func TestBuildStartCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := m.BuildStartCommand("test-server", tt.server)
+			result := b.BuildStartCommand("test-server", tt.server)
 			
 			// Note: Map iteration order is not guaranteed, so for tests with multiple env vars,
 			// we should check that all parts are present rather than exact string match
@@ -90,7 +90,7 @@ func TestBuildStartCommand(t *testing.T) {
 }
 
 func TestBuildStopCommand(t *testing.T) {
-	m := NewManager()
+	b := NewClaudeCmdBuilder()
 
 	tests := []struct {
 		name     string
@@ -112,7 +112,7 @@ func TestBuildStopCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := m.BuildStopCommand(tt.name)
+			result := b.BuildStopCommand(tt.name)
 			if result != tt.expected {
 				t.Errorf("BuildStopCommand() = %v, want %v", result, tt.expected)
 			}
@@ -121,14 +121,44 @@ func TestBuildStopCommand(t *testing.T) {
 }
 
 func TestBuildListCommand(t *testing.T) {
-	m := NewManager()
+	b := NewClaudeCmdBuilder()
 	
 	expected := "claude mcp list"
-	result := m.BuildListCommand()
+	result := b.BuildListCommand()
 	
 	if result != expected {
 		t.Errorf("BuildListCommand() = %v, want %v", result, expected)
 	}
+}
+
+func TestBuildResetCommands(t *testing.T) {
+	b := NewClaudeCmdBuilder()
+
+	t.Run("reset builds remove commands for specified servers", func(t *testing.T) {
+		// List of servers to reset
+		serverNames := []string{"server1", "server2", "server3"}
+		
+		// Get the reset commands
+		commands := b.BuildResetCommands(serverNames)
+		
+		// Should generate remove commands for each server
+		if len(commands) != 3 {
+			t.Errorf("expected 3 commands, got %d", len(commands))
+		}
+		
+		// Verify the exact commands
+		expectedCommands := []string{
+			"claude mcp remove server1",
+			"claude mcp remove server2",
+			"claude mcp remove server3",
+		}
+		
+		for i, cmd := range commands {
+			if cmd != expectedCommands[i] {
+				t.Errorf("command %d: expected %q, got %q", i, expectedCommands[i], cmd)
+			}
+		}
+	})
 }
 
 // Helper function to check if a string contains a substring

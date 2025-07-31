@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"cmcp/internal/config"
 )
@@ -26,8 +27,7 @@ func findClaude() string {
 
 func (m *Manager) StartServer(name string, server *config.MCPServer) error {
 	// Build the claude mcp add command
-	args := []string{"mcp", "add", name, server.Command}
-	args = append(args, server.Args...)
+	args := []string{"mcp", "add", name}
 	
 	// Add environment variables as options
 	if server.Env != nil {
@@ -36,13 +36,30 @@ func (m *Manager) StartServer(name string, server *config.MCPServer) error {
 		}
 	}
 	
+	// Add the command and its arguments
+	// Use -- to separate claude options from server command args
+	args = append(args, "--", server.Command)
+	args = append(args, server.Args...)
+	
+	// Show the command being executed
+	claude := findClaude()
+	fmt.Printf("Executing: %s %s\n", claude, strings.Join(args, " "))
+	
 	// Execute claude mcp add
-	cmd := exec.Command(findClaude(), args...)
+	cmd := exec.Command(claude, args...)
+	
+	// Capture stderr for error messages
+	var stderr strings.Builder
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = &stderr
 	
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to add server '%s' to Claude: %w", name, err)
+		errMsg := "failed to add server '%s' to Claude"
+		if stderr.Len() > 0 {
+			// Include stderr output in the error message
+			errMsg += ": " + strings.TrimSpace(stderr.String())
+		}
+		return fmt.Errorf(errMsg, name)
 	}
 
 	return nil

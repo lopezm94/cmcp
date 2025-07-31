@@ -15,6 +15,7 @@ var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start MCP servers",
 	Long:  `Start one or more MCP servers from your registered servers. Shows only servers that are not currently running.`,
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -81,7 +82,6 @@ var startCmd = &cobra.Command{
 			for _, err := range errors {
 				fmt.Printf("  • %v\n", err)
 			}
-			return fmt.Errorf("%d servers failed to start", len(errors))
 		}
 
 		return nil

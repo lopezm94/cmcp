@@ -40,6 +40,9 @@ if command -v podman >/dev/null 2>&1; then
             chmod +x /tmp/tests/mock-mcp-server.sh &&
             chmod +x /tmp/test-comprehensive.sh &&
             chmod +x /tmp/tests/test-install-scripts.sh &&
+            echo '=== Running Unit Tests ===' &&
+            cd /app && go test ./... -v &&
+            echo '' &&
             echo '=== Running Comprehensive Tests ===' &&
             /tmp/test-comprehensive.sh &&
             echo '' &&

@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var resetDryRun bool
+
 var resetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Stop all running MCP servers",
@@ -38,6 +40,19 @@ var resetCmd = &cobra.Command{
 			fmt.Printf("  - %s\n", name)
 		}
 
+		// Handle dry-run mode
+		if resetDryRun {
+			yellow := color.New(color.FgYellow)
+			yellow.Println("\nWould execute the following commands:")
+			fmt.Println()
+			
+			for _, name := range runningServers {
+				command := manager.BuildStopCommand(name)
+				fmt.Printf("$ %s\n", command)
+			}
+			return nil
+		}
+
 		prompt := promptui.Prompt{
 			Label:     "Are you sure you want to stop all servers",
 			IsConfirm: true,
@@ -56,4 +71,8 @@ var resetCmd = &cobra.Command{
 		color.Green("Successfully stopped all servers.")
 		return nil
 	},
+}
+
+func init() {
+	resetCmd.Flags().BoolVarP(&resetDryRun, "dry-run", "n", false, "Show commands that would be executed without running them")
 }

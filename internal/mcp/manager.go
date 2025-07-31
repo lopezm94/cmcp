@@ -26,33 +26,17 @@ func findClaude() string {
 }
 
 func (m *Manager) StartServer(name string, server *config.MCPServer, verbose bool) error {
-	// Build the claude mcp add command
-	args := []string{"mcp", "add", name}
+	// Build the command args
+	args := m.buildStartArgs(name, server)
 	
-	// Add environment variables as options
-	if server.Env != nil {
-		for k, v := range server.Env {
-			args = append(args, "--env", fmt.Sprintf("%s=%s", k, v))
-		}
-	}
-	
-	// Add the command and its arguments
-	// Use -- to separate claude options from server command args
-	args = append(args, "--", server.Command)
-	args = append(args, server.Args...)
-	
-	// Build the command
-	claude := findClaude()
-	
-	// Show simplified command if verbose
+	// Show command if verbose
 	if verbose {
-		// Show simplified command without full path
-		simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
-		fmt.Printf("  Command: %s\n", simplifiedCmd)
+		commandStr := m.BuildStartCommand(name, server)
+		fmt.Printf("  Command: %s\n", commandStr)
 	}
 	
 	// Execute claude mcp add
-	cmd := exec.Command(claude, args...)
+	cmd := exec.Command(findClaude(), args...)
 	
 	// Capture both stdout and stderr
 	var stdout, stderr strings.Builder
@@ -65,8 +49,8 @@ func (m *Manager) StartServer(name string, server *config.MCPServer, verbose boo
 	if err != nil {
 		// On error, show the full command and stderr
 		if !verbose {
-			simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
-			fmt.Printf("  Command failed: %s\n", simplifiedCmd)
+			commandStr := m.BuildStartCommand(name, server)
+			fmt.Printf("  Command failed: %s\n", commandStr)
 		}
 		if stderr.Len() > 0 {
 			fmt.Fprintf(os.Stderr, "%s", stderr.String())
@@ -103,17 +87,16 @@ func (m *Manager) StopServer(name string, verbose bool) error {
 	}
 
 	// Build the command
-	claude := findClaude()
+	commandStr := m.BuildStopCommand(name)
 	args := []string{"mcp", "remove", name}
 	
-	// Show simplified command if verbose
+	// Show command if verbose
 	if verbose {
-		simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
-		fmt.Printf("  Command: %s\n", simplifiedCmd)
+		fmt.Printf("  Command: %s\n", commandStr)
 	}
 
 	// Execute claude mcp remove
-	cmd := exec.Command(claude, args...)
+	cmd := exec.Command(findClaude(), args...)
 	
 	// Capture both stdout and stderr
 	var stdout, stderr strings.Builder
@@ -126,8 +109,7 @@ func (m *Manager) StopServer(name string, verbose bool) error {
 	if err != nil {
 		// On error, show the full command and stderr
 		if !verbose {
-			simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
-			fmt.Printf("  Command failed: %s\n", simplifiedCmd)
+			fmt.Printf("  Command failed: %s\n", commandStr)
 		}
 		if stderr.Len() > 0 {
 			fmt.Fprintf(os.Stderr, "%s", stderr.String())
@@ -196,4 +178,40 @@ func (m *Manager) IsRunning(name string) bool {
 	err := cmd.Run()
 	// If the command succeeds, the server exists in Claude
 	return err == nil
+}
+
+// buildStartArgs constructs the arguments for starting a server
+func (m *Manager) buildStartArgs(name string, server *config.MCPServer) []string {
+	// Build the claude mcp add command
+	args := []string{"mcp", "add", name}
+	
+	// Add environment variables as options
+	if server.Env != nil {
+		for k, v := range server.Env {
+			args = append(args, "--env", fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+	
+	// Add the command and its arguments
+	// Use -- to separate claude options from server command args
+	args = append(args, "--", server.Command)
+	args = append(args, server.Args...)
+	
+	return args
+}
+
+// BuildStartCommand constructs the command to start a server without executing it
+func (m *Manager) BuildStartCommand(name string, server *config.MCPServer) string {
+	args := m.buildStartArgs(name, server)
+	return fmt.Sprintf("claude %s", strings.Join(args, " "))
+}
+
+// BuildStopCommand constructs the command to stop a server without executing it
+func (m *Manager) BuildStopCommand(name string) string {
+	return fmt.Sprintf("claude mcp remove %s", name)
+}
+
+// BuildListCommand constructs the command to list servers without executing it
+func (m *Manager) BuildListCommand() string {
+	return "claude mcp list"
 }

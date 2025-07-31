@@ -10,11 +10,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var onlineDryRun bool
+
 var onlineCmd = &cobra.Command{
 	Use:   "online",
 	Short: "Show currently running MCP servers",
 	Long:  `Display a list of all MCP servers that are currently running in Claude.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Handle dry-run mode
+		if onlineDryRun {
+			yellow := color.New(color.FgYellow)
+			yellow.Println("Would execute the following command:")
+			fmt.Println()
+			fmt.Printf("$ %s\n", manager.BuildListCommand())
+			return nil
+		}
+		
 		// Execute claude mcp list and capture output
 		claudePath := "claude"
 		if path, err := exec.LookPath("claude"); err == nil {
@@ -56,4 +67,8 @@ var onlineCmd = &cobra.Command{
 		
 		return nil
 	},
+}
+
+func init() {
+	onlineCmd.Flags().BoolVarP(&onlineDryRun, "dry-run", "n", false, "Show command that would be executed without running it")
 }

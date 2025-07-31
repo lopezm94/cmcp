@@ -9,7 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var stopVerbose bool
+var (
+	stopVerbose bool
+	stopDryRun  bool
+)
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
@@ -57,6 +60,19 @@ var stopCmd = &cobra.Command{
 			return nil
 		}
 
+		// Handle dry-run mode
+		if stopDryRun {
+			yellow := color.New(color.FgYellow)
+			yellow.Println("Would execute the following commands:")
+			fmt.Println()
+			
+			for _, serverName := range selectedServers {
+				command := manager.BuildStopCommand(serverName)
+				fmt.Printf("$ %s\n", command)
+			}
+			return nil
+		}
+		
 		// Stop each selected server
 		var errors []error
 		var stopped []string
@@ -92,4 +108,5 @@ var stopCmd = &cobra.Command{
 
 func init() {
 	stopCmd.Flags().BoolVarP(&stopVerbose, "verbose", "v", false, "Show verbose output including command details")
+	stopCmd.Flags().BoolVarP(&stopDryRun, "dry-run", "n", false, "Show commands that would be executed without running them")
 }

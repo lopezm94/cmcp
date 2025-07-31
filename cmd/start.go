@@ -13,6 +13,7 @@ import (
 var (
 	manager = mcp.NewManager()
 	verbose bool
+	dryRun  bool
 )
 
 var startCmd = &cobra.Command{
@@ -62,6 +63,20 @@ var startCmd = &cobra.Command{
 			return nil
 		}
 
+		// Handle dry-run mode
+		if dryRun {
+			yellow := color.New(color.FgYellow)
+			yellow.Println("Would execute the following commands:")
+			fmt.Println()
+			
+			for _, serverName := range selectedServers {
+				selectedServer, _ := cfg.FindServer(serverName)
+				command := manager.BuildStartCommand(serverName, selectedServer)
+				fmt.Printf("$ %s\n", command)
+			}
+			return nil
+		}
+		
 		// Start each selected server
 		var errors []error
 		var started []string
@@ -98,4 +113,5 @@ var startCmd = &cobra.Command{
 
 func init() {
 	startCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show verbose output including command details")
+	startCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show commands that would be executed without running them")
 }

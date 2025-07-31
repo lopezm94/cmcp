@@ -39,10 +39,10 @@ Install cmcp with a single command:
 
 ```bash
 # Install
-curl -sSL https://raw.githubusercontent.com/lopezm94/cmcp/main/web-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/lopezm94/cmcp/main/scripts/web-install.sh | bash
 
 # Uninstall
-curl -sSL https://raw.githubusercontent.com/lopezm94/cmcp/main/web-uninstall.sh | bash
+curl -sSL https://raw.githubusercontent.com/lopezm94/cmcp/main/scripts/web-uninstall.sh | bash
 ```
 
 ### Manual Installation
@@ -53,15 +53,15 @@ git clone https://github.com/lopezm94/cmcp.git
 cd cmcp
 
 # Install or upgrade (automatically detects existing installation)
-./install.sh
+./scripts/install.sh
 
 # To uninstall completely
-./uninstall.sh
+./scripts/uninstall.sh
 ```
 
 ### Installation Scripts
 
-- **`./install.sh`** - Install or upgrade cmcp
+- **`./scripts/install.sh`** - Install or upgrade cmcp
   - Automatically detects if this is a fresh install or upgrade
   - Builds and installs the binary to `/usr/local/bin`
   - Sets up shell completions for your shell
@@ -69,7 +69,7 @@ cd cmcp
   - For upgrades: shows version info and offers to stop running servers
   - For fresh installs: creates the configuration directory `~/.cmcp`
 
-- **`./uninstall.sh`** - Remove cmcp from your system
+- **`./scripts/uninstall.sh`** - Remove cmcp from your system
   - Removes the cmcp binary
   - Removes shell completions
   - Optionally removes configuration (asks for confirmation)

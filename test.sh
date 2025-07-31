@@ -37,7 +37,6 @@ if command -v podman >/dev/null 2>&1; then
             cp -r /app/tests . &&
             # Replace ./cmcp with /tmp/cmcp and disable set -e in test script
             sed 's|\./cmcp|/tmp/cmcp|g; s|set -e|set +e|g' /app/tests/test-comprehensive.sh > /tmp/test-comprehensive.sh &&
-            chmod +x /tmp/tests/mock-mcp-server.sh &&
             chmod +x /tmp/test-comprehensive.sh &&
             chmod +x /tmp/tests/test-install-scripts.sh &&
             echo '=== Running Unit Tests ===' &&
@@ -47,7 +46,10 @@ if command -v podman >/dev/null 2>&1; then
             /tmp/test-comprehensive.sh &&
             echo '' &&
             echo '=== Running Install/Uninstall Tests ===' &&
-            /tmp/tests/test-install-scripts.sh
+            /tmp/tests/test-install-scripts.sh &&
+            echo '' &&
+            echo '=== Running Web Install/Uninstall Tests ===' &&
+            cd /app && /app/tests/test-web-install.sh
         "
 elif command -v docker >/dev/null 2>&1; then
     echo "Using Docker"

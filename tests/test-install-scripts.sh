@@ -113,7 +113,7 @@ test_start "Fresh install - no existing config"
     mkdir -p "$TEST_BIN/../local/bin"
     
     # Run install - should not detect existing cmcp
-    OUTPUT=$(HOME="$TEST_HOME" ./install.sh 2>&1 | tail -20)
+    OUTPUT=$(HOME="$TEST_HOME" ./scripts/install.sh 2>&1 | tail -20)
     
     if [[ "$OUTPUT" == *"cmcp installed successfully"* ]] && [[ ! "$OUTPUT" == *"Existing configuration found"* ]]; then
         test_pass "Fresh install completed without mentioning existing config"
@@ -150,7 +150,7 @@ EOF
     fi
     
     # Run install
-    OUTPUT=$(HOME="$TEST_HOME" ./install.sh 2>&1 | tail -20)
+    OUTPUT=$(HOME="$TEST_HOME" ./scripts/install.sh 2>&1 | tail -20)
     
     # Restore cmcp
     if [[ -f "${CMCP_TMP}.tmp2" ]]; then
@@ -195,7 +195,7 @@ test_start "Uninstall - keep configuration (default N)"
 EOF
     
     # Run uninstall with 'n' response (keep config)
-    OUTPUT=$(echo "n" | HOME="$TEST_HOME" ./uninstall.sh 2>&1)
+    OUTPUT=$(echo "n" | HOME="$TEST_HOME" ./scripts/uninstall.sh 2>&1)
     
     if [[ "$OUTPUT" == *"Keeping configuration registry"* ]] && [[ -f "$TEST_HOME/.cmcp/config.json" ]]; then
         test_pass "Uninstall kept configuration when user selected 'n'"
@@ -225,7 +225,7 @@ test_start "Uninstall - remove configuration (y)"
 EOF
     
     # Run uninstall with 'y' response (remove config)
-    OUTPUT=$(echo "y" | HOME="$TEST_HOME" ./uninstall.sh 2>&1)
+    OUTPUT=$(echo "y" | HOME="$TEST_HOME" ./scripts/uninstall.sh 2>&1)
     
     if [[ "$OUTPUT" == *"All server configurations removed"* ]] && [[ ! -d "$TEST_HOME/.cmcp" ]]; then
         test_pass "Uninstall removed configuration when user selected 'y'"
@@ -277,7 +277,7 @@ EOF
     chmod +x "$TEST_BIN/cmcp"
     
     # Run install (should detect as upgrade), 'n' to not stop servers
-    OUTPUT=$(echo "n" | HOME="$TEST_HOME" ./install.sh 2>&1)
+    OUTPUT=$(echo "n" | HOME="$TEST_HOME" ./scripts/install.sh 2>&1)
     
     if [[ "$OUTPUT" == *"Detected existing cmcp installation"* ]] && [[ "$OUTPUT" == *"upgraded successfully"* ]] && [[ "$OUTPUT" == *"Configuration preserved: 3 server(s) available"* ]]; then
         # Verify config still intact
@@ -303,7 +303,7 @@ test_start "Root permission explanations"
     cd /tmp/cmcp-src
     
     # Check install script
-    INSTALL_MSG=$(./install.sh 2>&1 | grep -A2 "Root permission required" || echo "")
+    INSTALL_MSG=$(./scripts/install.sh 2>&1 | grep -A2 "Root permission required" || echo "")
     if [[ "$INSTALL_MSG" == *"Install the cmcp binary"* ]] && [[ "$INSTALL_MSG" == *"shell completions"* ]]; then
         test_pass "Install script explains root permissions"
     else
@@ -311,7 +311,7 @@ test_start "Root permission explanations"
     fi
     
     # Check uninstall script
-    UNINSTALL_MSG=$(echo "n" | ./uninstall.sh 2>&1 | grep -A2 "Root permission will be required" || echo "")
+    UNINSTALL_MSG=$(echo "n" | ./scripts/uninstall.sh 2>&1 | grep -A2 "Root permission will be required" || echo "")
     if [[ "$UNINSTALL_MSG" == *"Remove the cmcp binary"* ]] && [[ "$UNINSTALL_MSG" == *"shell completions"* ]]; then
         test_pass "Uninstall script explains root permissions"
     else
@@ -326,7 +326,7 @@ echo "cmcp version test"
 EOF
     chmod +x "$TEST_BIN/cmcp"
     
-    INSTALL_UPGRADE_MSG=$(echo "n" | ./install.sh 2>&1 | grep -A2 "Root permission required" || echo "")
+    INSTALL_UPGRADE_MSG=$(echo "n" | ./scripts/install.sh 2>&1 | grep -A2 "Root permission required" || echo "")
     if [[ "$INSTALL_UPGRADE_MSG" == *"Install the cmcp binary"* ]]; then
         test_pass "Install script (upgrade mode) explains root permissions"
     else
@@ -348,7 +348,7 @@ test_start "Install works without existing cmcp"
         mv "$HIDDEN_CMCP" "${HIDDEN_CMCP}.hidden7" 2>/dev/null || true
     fi
     
-    OUTPUT=$(HOME="$TEST_HOME" ./install.sh 2>&1 | tail -5)
+    OUTPUT=$(HOME="$TEST_HOME" ./scripts/install.sh 2>&1 | tail -5)
     
     # Restore cmcp
     if [[ -n "$HIDDEN_CMCP" ]] && [[ -f "${HIDDEN_CMCP}.hidden7" ]]; then
@@ -376,7 +376,7 @@ test_start "Install detects existing cmcp vs fresh install"
         mv "$HIDDEN_CMCP" "${HIDDEN_CMCP}.hidden8" 2>/dev/null || true
     fi
     
-    OUTPUT=$(HOME="$TEST_HOME" ./install.sh 2>&1 | head -5)
+    OUTPUT=$(HOME="$TEST_HOME" ./scripts/install.sh 2>&1 | head -5)
     
     # Restore hidden cmcp
     if [[ -n "$HIDDEN_CMCP" ]] && [[ -f "${HIDDEN_CMCP}.hidden8" ]]; then
@@ -398,7 +398,7 @@ fi
 EOF
     chmod +x "$TEST_BIN/cmcp"
     
-    OUTPUT=$(HOME="$TEST_HOME" ./install.sh 2>&1 | head -5)
+    OUTPUT=$(HOME="$TEST_HOME" ./scripts/install.sh 2>&1 | head -5)
     if [[ "$OUTPUT" == *"Detected existing cmcp installation"* ]]; then
         test_pass "Install correctly detects existing cmcp"
     else

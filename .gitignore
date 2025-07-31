@@ -15,6 +15,7 @@ dist/
 # Test artifacts
 *.log
 coverage.out
+tests/Dockerfile.web-test
 
 # IDE files
 .vscode/

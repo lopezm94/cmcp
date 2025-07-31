@@ -38,9 +38,9 @@ if [ -d "$CONFIG_DIR" ]; then
     if [ -t 0 ]; then
         read -r REMOVE_CONFIG
     else
-        # If piped, default to 'n'
-        echo "n (default for piped input)"
-        REMOVE_CONFIG="n"
+        # If piped, read from stdin
+        read -r REMOVE_CONFIG
+        echo "$REMOVE_CONFIG"
     fi
 fi
 

@@ -33,10 +33,24 @@ A command-line tool for managing Model Context Protocol (MCP) servers on your sy
 
 ## Installation
 
+### Quick Install (Recommended)
+
+Install cmcp with a single command:
+
+```bash
+# Install
+curl -sSL https://raw.githubusercontent.com/lopezm94/cmcp/main/web-install.sh | bash
+
+# Uninstall
+curl -sSL https://raw.githubusercontent.com/lopezm94/cmcp/main/web-uninstall.sh | bash
+```
+
+### Manual Installation
+
 ```bash
 # Clone and install cmcp
-git clone <repository-url>
-cd global-cli
+git clone https://github.com/lopezm94/cmcp.git
+cd cmcp
 
 # Install or upgrade (automatically detects existing installation)
 ./install.sh

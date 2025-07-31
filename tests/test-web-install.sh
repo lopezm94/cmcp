@@ -1,7 +1,8 @@
 #!/bin/bash
-# Test web-based install/uninstall scripts in isolated container
+# Test web-based install/uninstall scripts - optimized for running inside test container
+# This version runs sequentially with cleanup between tests, no separate container needed
 
-set -e
+set +e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -10,12 +11,14 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 echo -e "${BLUE}=== Web Install/Uninstall Test Suite ===${NC}"
-echo "Testing curl-based installation in isolated environment"
-echo -e "${YELLOW}Note: Tests build from source, which may take a few minutes${NC}"
+echo "Testing curl-based installation with environment cleanup"
 echo ""
 
-FAILED_TESTS=0
-PASSED_TESTS=0
+# Use temp files to track test results across subshells
+PASS_COUNT_FILE=/tmp/web_pass_count_$$
+FAIL_COUNT_FILE=/tmp/web_fail_count_$$
+echo "0" > "$PASS_COUNT_FILE"
+echo "0" > "$FAIL_COUNT_FILE"
 
 # Test helper functions
 test_start() {
@@ -24,73 +27,90 @@ test_start() {
 
 test_pass() {
     echo -e "${GREEN}✓ PASSED: $1${NC}"
-    ((PASSED_TESTS++))
+    local count=$(cat "$PASS_COUNT_FILE")
+    echo $((count + 1)) > "$PASS_COUNT_FILE"
 }
 
 test_fail() {
     echo -e "${RED}✗ FAILED: $1${NC}"
     echo -e "${RED}  Error: $2${NC}"
-    ((FAILED_TESTS++))
+    local count=$(cat "$FAIL_COUNT_FILE")
+    echo $((count + 1)) > "$FAIL_COUNT_FILE"
 }
 
-# Build test container
-echo "Building test container..."
-DOCKERFILE_PATH="$(pwd)/tests/Dockerfile.web-test"
-cat > "$DOCKERFILE_PATH" << 'EOF'
-FROM golang:1.21-alpine
+# Cleanup function to ensure clean environment between tests
+cleanup_environment() {
+    # Remove cmcp binary
+    sudo rm -f /usr/local/bin/cmcp 2>/dev/null || true
+    
+    # Remove config directory
+    rm -rf ~/.cmcp 2>/dev/null || true
+    
+    # Clean up any temp directories from web scripts
+    rm -rf /tmp/cmcp-install-* 2>/dev/null || true
+    rm -rf /tmp/cmcp-uninstall-* 2>/dev/null || true
+    
+    # Ensure cmcp is not in PATH
+    hash -r
+}
 
-# Install required packages
-RUN apk add --no-cache bash curl git jq sudo nodejs npm
+# Mock git clone to use local source instead of downloading
+mock_git_clone() {
+    local REPO_URL="$1"
+    local TARGET_DIR="${2:-.}"
+    
+    if [[ "$REPO_URL" == *"github.com/lopezm94/cmcp"* ]]; then
+        # Copy local source to target directory (excluding the binary)
+        cp -r /app/* "$TARGET_DIR/" 2>/dev/null || true
+        # Remove the macOS binary if it was copied
+        rm -f "$TARGET_DIR/cmcp" 2>/dev/null || true
+        return 0
+    else
+        # Fall back to real git clone for other repos
+        git clone "$REPO_URL" "$TARGET_DIR"
+    fi
+}
 
-# Install Claude CLI (simulated)
-RUN npm install -g @anthropic-ai/claude-code
+# Override git command for this script
+git() {
+    if [[ "$1" == "clone" ]]; then
+        shift
+        mock_git_clone "$@"
+    else
+        command git "$@"
+    fi
+}
 
-# Create non-root user for testing
-RUN adduser -D testuser && \
-    echo "testuser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+# Export the function so it's available to subshells
+export -f git
+export -f mock_git_clone
 
-# Set up directories
-RUN mkdir -p /usr/local/bin && \
-    chmod 755 /usr/local/bin
+# Ensure we start clean
+cleanup_environment
 
-WORKDIR /workspace
-
-# Switch to non-root user
-USER testuser
-ENV HOME=/home/testuser
-EOF
-
-# Build container
-if command -v podman >/dev/null 2>&1; then
-    CONTAINER_CMD="podman"
-else
-    CONTAINER_CMD="docker"
-fi
-
-$CONTAINER_CMD build -f "$DOCKERFILE_PATH" -t cmcp-web-test .
+# Remove /app from PATH to avoid macOS binary conflicts
+export PATH=$(echo "$PATH" | sed 's|/app:||g')
 
 # Test 1: Fresh web install
 test_start "Web install (fresh)"
-OUTPUT=$($CONTAINER_CMD run --rm \
-    -v "$(pwd):/workspace:ro" \
-    cmcp-web-test \
-    bash -c "cd /tmp && bash /workspace/scripts/web-install.sh 2>&1")
-
-if [[ "$OUTPUT" == *"cmcp installed successfully"* ]]; then
-    test_pass "Web install completed"
-else
-    test_fail "Web install" "Installation failed: $OUTPUT"
-fi
+(
+    cd /tmp
+    OUTPUT=$(bash /app/scripts/web-install.sh 2>&1)
+    
+    if [[ "$OUTPUT" == *"cmcp installed successfully"* ]] && command -v cmcp >/dev/null 2>&1; then
+        test_pass "Web install completed"
+    else
+        test_fail "Web install" "Installation failed or cmcp not found: $OUTPUT"
+    fi
+)
+cleanup_environment
 
 # Test 2: Web install with existing config
 test_start "Web install with existing config"
-OUTPUT=$($CONTAINER_CMD run --rm \
-    -v "$(pwd):/workspace:ro" \
-    cmcp-web-test \
-    bash -c '
-        # Create config
-        mkdir -p ~/.cmcp
-        cat > ~/.cmcp/config.json << "JSON"
+(
+    # Create config
+    mkdir -p ~/.cmcp
+    cat > ~/.cmcp/config.json << 'JSON'
 {
   "mcpServers": {
     "test1": {"command": "test", "args": ["arg1"]},
@@ -98,94 +118,123 @@ OUTPUT=$($CONTAINER_CMD run --rm \
   }
 }
 JSON
-        # Run install
-        cd /tmp && bash /workspace/scripts/web-install.sh 2>&1 || true
-    ')
-
-if [[ "$OUTPUT" == *"Configuration preserved: 2 server(s) available"* ]]; then
-    test_pass "Web install preserved existing config"
-else
-    test_fail "Config preservation" "Config not preserved: $OUTPUT"
-fi
+    
+    cd /tmp
+    OUTPUT=$(bash /app/scripts/web-install.sh 2>&1)
+    
+    if [[ "$OUTPUT" == *"Configuration preserved: 2 server(s) available"* ]]; then
+        # Verify config still exists
+        if [[ -f ~/.cmcp/config.json ]] && grep -q "test1" ~/.cmcp/config.json; then
+            test_pass "Web install preserved existing config"
+        else
+            test_fail "Config preservation" "Config file was modified"
+        fi
+    else
+        test_fail "Config preservation" "Did not preserve config: $OUTPUT"
+    fi
+)
+cleanup_environment
 
 # Test 3: Web uninstall (keep config)
 test_start "Web uninstall - keep config"
-OUTPUT=$($CONTAINER_CMD run --rm \
-    -v "$(pwd):/workspace:ro" \
-    cmcp-web-test \
-    bash -c '
-        # Install first
-        cd /tmp && bash /workspace/scripts/web-install.sh >/dev/null 2>&1 || true
-        # Create config
-        mkdir -p ~/.cmcp
-        echo "{\"mcpServers\":{}}" > ~/.cmcp/config.json
-        # Uninstall (pipe "n" to keep config)
-        echo "n" | bash /workspace/scripts/web-uninstall.sh 2>&1 || true
-    ')
-
-if [[ "$OUTPUT" == *"Configuration preserved"* ]] && [[ "$OUTPUT" == *"successfully uninstalled"* ]]; then
-    test_pass "Web uninstall kept config when requested"
-else
-    test_fail "Uninstall keep config" "Unexpected output: $OUTPUT"
-fi
+(
+    # Install first
+    cd /tmp
+    bash /app/scripts/web-install.sh >/dev/null 2>&1 || true
+    
+    # Create config
+    mkdir -p ~/.cmcp
+    echo '{"mcpServers":{}}' > ~/.cmcp/config.json
+    
+    # Uninstall (pipe "n" to keep config)
+    OUTPUT=$(echo "n" | bash /app/scripts/web-uninstall.sh 2>&1)
+    
+    if [[ "$OUTPUT" == *"Keeping configuration registry"* ]] && 
+       [[ "$OUTPUT" == *"uninstalled successfully"* ]] && 
+       [[ -f ~/.cmcp/config.json ]]; then
+        test_pass "Web uninstall kept config when requested"
+    else
+        test_fail "Uninstall keep config" "Config removed or wrong output: $OUTPUT"
+    fi
+)
+cleanup_environment
 
 # Test 4: Web uninstall (remove config)
 test_start "Web uninstall - remove config"
-OUTPUT=$($CONTAINER_CMD run --rm \
-    -v "$(pwd):/workspace:ro" \
-    cmcp-web-test \
-    bash -c '
-        # Install first
-        cd /tmp && bash /workspace/scripts/web-install.sh >/dev/null 2>&1 || true
-        # Create config
-        mkdir -p ~/.cmcp
-        echo "{\"mcpServers\":{}}" > ~/.cmcp/config.json
-        # Uninstall (pipe "y" to remove config)
-        echo "y" | bash /workspace/scripts/web-uninstall.sh 2>&1 || true
-    ')
+(
+    # Install first
+    cd /tmp
+    bash /app/scripts/web-install.sh >/dev/null 2>&1 || true
+    
+    # Create config
+    mkdir -p ~/.cmcp
+    echo '{"mcpServers":{}}' > ~/.cmcp/config.json
+    
+    # Uninstall (pipe "y" to remove config)
+    OUTPUT=$(echo "y" | bash /app/scripts/web-uninstall.sh 2>&1)
+    
+    if [[ "$OUTPUT" == *"All server configurations removed"* ]] && 
+       [[ "$OUTPUT" == *"uninstalled successfully"* ]] && 
+       [[ ! -d ~/.cmcp ]]; then
+        test_pass "Web uninstall removed config when requested"
+    else
+        test_fail "Uninstall remove config" "Config still exists or wrong output: $OUTPUT"
+    fi
+)
+cleanup_environment
 
-if [[ "$OUTPUT" == *"Configuration removed"* ]] && [[ "$OUTPUT" == *"successfully uninstalled"* ]]; then
-    test_pass "Web uninstall removed config when requested"
-else
-    test_fail "Uninstall remove config" "Unexpected output: $OUTPUT"
-fi
+# Test 5: Web install error handling (no git)
+test_start "Web install error - no git available"
+(
+    # Unset our git function for this test
+    unset -f git
+    
+    # Temporarily hide real git
+    GIT_PATH=$(which git)
+    sudo mv "$GIT_PATH" "${GIT_PATH}.bak" 2>/dev/null || true
+    
+    cd /tmp
+    OUTPUT=$(bash /app/scripts/web-install.sh 2>&1 || true)
+    
+    # Restore git
+    sudo mv "${GIT_PATH}.bak" "$GIT_PATH" 2>/dev/null || true
+    
+    if [[ "$OUTPUT" == *"Git is required"* ]]; then
+        test_pass "Web install correctly requires git"
+    else
+        test_fail "Git requirement" "Did not detect missing git: $OUTPUT"
+    fi
+)
+cleanup_environment
 
-# Test 5: Install from source (no releases)
-test_start "Web install from source"
-OUTPUT=$($CONTAINER_CMD run --rm \
-    -v "$(pwd):/workspace:ro" \
-    cmcp-web-test \
-    bash -c "cd /tmp && cp -r /workspace . && cd workspace && bash web-install.sh 2>&1 || true")
+# Test 6: Web uninstall when cmcp not installed
+test_start "Web uninstall with no cmcp"
+(
+    cd /tmp
+    OUTPUT=$(bash /app/scripts/web-uninstall.sh 2>&1 || true)
+    
+    if [[ "$OUTPUT" == *"cmcp is not installed"* ]]; then
+        test_pass "Web uninstall correctly handles missing cmcp"
+    else
+        test_fail "Uninstall no cmcp" "Unexpected output: $OUTPUT"
+    fi
+)
+cleanup_environment
 
-if [[ "$OUTPUT" == *"Building cmcp"* ]] && [[ "$OUTPUT" == *"installed successfully"* ]]; then
-    test_pass "Web install built from source"
-else
-    test_fail "Install from source" "Build failed: $OUTPUT"
-fi
+# Read final counts
+TOTAL_PASSED=$(cat "$PASS_COUNT_FILE")
+TOTAL_FAILED=$(cat "$FAIL_COUNT_FILE")
 
-# Test 6: OS/Arch detection
-test_start "OS/Architecture detection"
-OUTPUT=$($CONTAINER_CMD run --rm \
-    -v "$(pwd):/workspace:ro" \
-    cmcp-web-test \
-    bash -c "cd /tmp && bash /workspace/scripts/web-install.sh 2>&1 | grep 'Detected:' || true")
-
-if [[ "$OUTPUT" == *"linux"* ]]; then
-    test_pass "OS detection works"
-else
-    test_fail "OS detection" "Failed to detect OS: $OUTPUT"
-fi
-
-# Cleanup
-rm -f "$DOCKERFILE_PATH"
+# Clean up temp files
+rm -f "$PASS_COUNT_FILE" "$FAIL_COUNT_FILE"
 
 # Summary
 echo ""
 echo -e "${BLUE}=== Test Summary ===${NC}"
-echo -e "${GREEN}Passed: $PASSED_TESTS${NC}"
-echo -e "${RED}Failed: $FAILED_TESTS${NC}"
+echo -e "${GREEN}Passed: ${TOTAL_PASSED}${NC}"
+echo -e "${RED}Failed: ${TOTAL_FAILED}${NC}"
 
-if [ $FAILED_TESTS -eq 0 ]; then
+if [ $TOTAL_FAILED -eq 0 ] && [ $TOTAL_PASSED -gt 0 ]; then
     echo -e "${GREEN}🎉 All web install/uninstall tests passed!${NC}"
     exit 0
 else

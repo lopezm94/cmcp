@@ -49,7 +49,9 @@ if command -v podman >/dev/null 2>&1; then
             /tmp/tests/test-install-scripts.sh &&
             echo '' &&
             echo '=== Running Web Install/Uninstall Tests ===' &&
-            cd /app && /app/tests/test-web-install.sh
+            cp /app/tests/test-web-install.sh /tmp/ &&
+            chmod +x /tmp/test-web-install.sh &&
+            /tmp/test-web-install.sh
         "
 elif command -v docker >/dev/null 2>&1; then
     echo "Using Docker"
@@ -57,15 +59,49 @@ elif command -v docker >/dev/null 2>&1; then
     echo "This will test all functionality in an isolated container."
     echo ""
 
-    # Build and run tests
-    docker-compose -f tests/docker-compose.test.yml up --build --abort-on-container-exit --force-recreate
+    # Build the test image
+    echo "Building test image..."
+    docker build -f tests/Dockerfile.test -t cmcp-test .
 
-    # Get exit code
-    EXIT_CODE=$?
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to build test image"
+        exit 1
+    fi
 
-    # Clean up
-    docker-compose -f tests/docker-compose.test.yml down
-    exit $EXIT_CODE
+    echo "Running tests..."
+
+    # Run tests in container with proper binary location
+    docker run --rm \
+        -v ./:/app:ro \
+        --tmpfs /tmp \
+        --tmpfs /root \
+        -e HOME=/root \
+        cmcp-test \
+        /bin/bash -c "
+            export PATH=/usr/local/go/bin:\$PATH &&
+            cd /app && 
+            go build -o /tmp/cmcp && 
+            export PATH=/tmp:\$PATH &&
+            cd /tmp &&
+            cp -r /app/tests . &&
+            # Replace ./cmcp with /tmp/cmcp and disable set -e in test script
+            sed 's|\./cmcp|/tmp/cmcp|g; s|set -e|set +e|g' /app/tests/test-comprehensive.sh > /tmp/test-comprehensive.sh &&
+            chmod +x /tmp/test-comprehensive.sh &&
+            chmod +x /tmp/tests/test-install-scripts.sh &&
+            echo '=== Running Unit Tests ===' &&
+            cd /app && go test ./... -v &&
+            echo '' &&
+            echo '=== Running Comprehensive Tests ===' &&
+            /tmp/test-comprehensive.sh &&
+            echo '' &&
+            echo '=== Running Install/Uninstall Tests ===' &&
+            /tmp/tests/test-install-scripts.sh &&
+            echo '' &&
+            echo '=== Running Web Install/Uninstall Tests ===' &&
+            cp /app/tests/test-web-install.sh /tmp/ &&
+            chmod +x /tmp/test-web-install.sh &&
+            /tmp/test-web-install.sh
+        "
 else
     echo "❌ Error: Neither Podman nor Docker found"
     echo "Please install Podman or Docker to run tests"

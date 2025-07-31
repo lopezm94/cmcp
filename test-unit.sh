@@ -1,6 +1,6 @@
 #!/bin/bash
-# Local test runner - runs tests without containers
-# Useful for quick testing during development
+# Unit test runner - runs Go unit tests locally without containers
+# Fast execution for development and CI/CD
 
 set -e
 
@@ -10,8 +10,8 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== CMCP Local Test Runner ===${NC}"
-echo "Running tests locally (without containers)"
+echo -e "${BLUE}=== CMCP Unit Test Runner ===${NC}"
+echo "Running Go unit tests locally"
 echo ""
 
 # Track overall test status

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"cmcp/internal/config"
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
@@ -28,11 +29,11 @@ var resetCmd = &cobra.Command{
 		}
 
 		if len(runningServers) == 0 {
-			fmt.Println("No servers from your config are currently running in Claude.")
+			color.Yellow("No servers from your config are currently running in Claude.")
 			return nil
 		}
 
-		fmt.Printf("Found %d running server(s) from your config:\n", len(runningServers))
+		color.Cyan("Found %d running server(s) from your config:\n", len(runningServers))
 		for _, name := range runningServers {
 			fmt.Printf("  - %s\n", name)
 		}
@@ -47,12 +48,12 @@ var resetCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Println("Stopping all servers...")
+		color.Cyan("Stopping all servers...")
 		if err := manager.StopAllServers(); err != nil {
 			return fmt.Errorf("failed to stop servers: %w", err)
 		}
 
-		fmt.Println("Successfully stopped all servers.")
+		color.Green("Successfully stopped all servers.")
 		return nil
 	},
 }

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -33,13 +34,15 @@ var onlineCmd = &cobra.Command{
 		
 		// Replace Claude's message with our own
 		if strings.Contains(output, "No MCP servers configured. Use `claude mcp add` to add a server.") {
-			output = "No servers are currently running. Use `cmcp start` to start a server."
+			color.Yellow("No servers are currently running. Use `cmcp start` to start a server.")
+			return nil
 		}
 		if strings.Contains(errorOutput, "No MCP servers configured. Use `claude mcp add` to add a server.") {
-			errorOutput = "No servers are currently running. Use `cmcp start` to start a server."
+			color.Yellow("No servers are currently running. Use `cmcp start` to start a server.")
+			return nil
 		}
 		
-		// Write the modified output
+		// Write the modified output (which contains the list of servers)
 		if output != "" {
 			fmt.Fprint(cmd.OutOrStdout(), output)
 		}

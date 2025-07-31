@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 
 	"cmcp/internal/config"
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +29,7 @@ var configRmCmd = &cobra.Command{
 		}
 
 		if len(cfg.MCPServers) == 0 {
-			fmt.Println("No servers configured")
+			color.Yellow("No servers configured")
 			return nil
 		}
 
@@ -60,7 +61,7 @@ var configRmCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Successfully removed server '%s'\n", serverName)
+		color.Green("Successfully removed server '%s'\n", serverName)
 		return nil
 	},
 }
@@ -75,7 +76,7 @@ var configListCmd = &cobra.Command{
 		}
 
 		if len(cfg.MCPServers) == 0 {
-			fmt.Println("No servers configured")
+			color.Yellow("No servers configured")
 			return nil
 		}
 
@@ -110,7 +111,7 @@ var configOpenCmd = &cobra.Command{
 			return fmt.Errorf("failed to load/create config: %w", err)
 		}
 
-		fmt.Printf("Opening config file...\n")
+		color.Cyan("Opening config file...\n")
 		if err := openInEditor(configPath, ""); err != nil {
 			return err
 		}
@@ -126,7 +127,7 @@ var configOpenCmd = &cobra.Command{
 			return fmt.Errorf("failed to reformat config: %w", err)
 		}
 
-		fmt.Printf("Config file reformatted successfully.\n")
+		color.Green("Config file reformatted successfully.\n")
 		return nil
 	},
 }

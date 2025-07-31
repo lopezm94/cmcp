@@ -25,7 +25,7 @@ func findClaude() string {
 	return "claude" // fallback
 }
 
-func (m *Manager) StartServer(name string, server *config.MCPServer) error {
+func (m *Manager) StartServer(name string, server *config.MCPServer, verbose bool) error {
 	// Build the claude mcp add command
 	args := []string{"mcp", "add", name}
 	
@@ -41,43 +41,117 @@ func (m *Manager) StartServer(name string, server *config.MCPServer) error {
 	args = append(args, "--", server.Command)
 	args = append(args, server.Args...)
 	
-	// Show the command being executed
+	// Build the command
 	claude := findClaude()
-	fmt.Printf("Executing: %s %s\n", claude, strings.Join(args, " "))
+	
+	// Show simplified command if verbose
+	if verbose {
+		// Show simplified command without full path
+		simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
+		fmt.Printf("  Command: %s\n", simplifiedCmd)
+	}
 	
 	// Execute claude mcp add
 	cmd := exec.Command(claude, args...)
 	
-	// Capture stderr for error messages
-	var stderr strings.Builder
-	cmd.Stdout = os.Stdout
+	// Capture both stdout and stderr
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	
-	if err := cmd.Run(); err != nil {
-		errMsg := "failed to add server '%s' to Claude"
-		if stderr.Len() > 0 {
-			// Include stderr output in the error message
-			errMsg += ": " + strings.TrimSpace(stderr.String())
+	err := cmd.Run()
+	
+	// Handle output based on verbose flag and error state
+	if err != nil {
+		// On error, show the full command and stderr
+		if !verbose {
+			simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
+			fmt.Printf("  Command failed: %s\n", simplifiedCmd)
 		}
-		return fmt.Errorf(errMsg, name)
+		if stderr.Len() > 0 {
+			fmt.Fprintf(os.Stderr, "%s", stderr.String())
+		}
+		return fmt.Errorf("failed to add server '%s' to Claude", name)
+	}
+	
+	// In verbose mode, parse and show only relevant info
+	if verbose && stdout.Len() > 0 {
+		output := stdout.String()
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		for _, line := range lines {
+			// Skip the duplicate "Added stdio MCP server..." line
+			if strings.Contains(line, "Added stdio MCP server") {
+				continue
+			}
+			// Show file modifications with indentation
+			if strings.Contains(line, "File modified:") {
+				fmt.Printf("  %s\n", line)
+			} else {
+				// Show other output as-is
+				fmt.Println(line)
+			}
+		}
 	}
 
 	return nil
 }
 
-func (m *Manager) StopServer(name string) error {
+func (m *Manager) StopServer(name string, verbose bool) error {
 	// First check if server exists in Claude
 	if !m.IsRunning(name) {
 		return fmt.Errorf("server '%s' is not registered in Claude", name)
 	}
 
-	// Execute claude mcp remove
-	cmd := exec.Command(findClaude(), "mcp", "remove", name)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	// Build the command
+	claude := findClaude()
+	args := []string{"mcp", "remove", name}
 	
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to remove server '%s' from Claude: %w", name, err)
+	// Show simplified command if verbose
+	if verbose {
+		simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
+		fmt.Printf("  Command: %s\n", simplifiedCmd)
+	}
+
+	// Execute claude mcp remove
+	cmd := exec.Command(claude, args...)
+	
+	// Capture both stdout and stderr
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	
+	err := cmd.Run()
+	
+	// Handle output based on verbose flag and error state
+	if err != nil {
+		// On error, show the full command and stderr
+		if !verbose {
+			simplifiedCmd := fmt.Sprintf("claude %s", strings.Join(args, " "))
+			fmt.Printf("  Command failed: %s\n", simplifiedCmd)
+		}
+		if stderr.Len() > 0 {
+			fmt.Fprintf(os.Stderr, "%s", stderr.String())
+		}
+		return fmt.Errorf("failed to remove server '%s' from Claude", name)
+	}
+	
+	// In verbose mode, parse and show only relevant info
+	if verbose && stdout.Len() > 0 {
+		output := stdout.String()
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		for _, line := range lines {
+			// Skip the duplicate "Removed MCP server..." line
+			if strings.Contains(line, "Removed MCP server") {
+				continue
+			}
+			// Show file modifications with indentation
+			if strings.Contains(line, "File modified:") {
+				fmt.Printf("  %s\n", line)
+			} else {
+				// Show other output as-is
+				fmt.Println(line)
+			}
+		}
 	}
 
 	return nil
@@ -100,9 +174,9 @@ func (m *Manager) StopAllServers() error {
 	for name := range cfg.MCPServers {
 		// Check if this server is in Claude before trying to remove
 		if m.IsRunning(name) {
-			cmd := exec.Command(findClaude(), "mcp", "remove", name)
-			if err := cmd.Run(); err != nil {
-				errors = append(errors, fmt.Errorf("failed to remove server '%s' from Claude: %w", name, err))
+			// Use StopServer with verbose=false for reset command
+			if err := m.StopServer(name, false); err != nil {
+				errors = append(errors, err)
 			}
 		}
 	}

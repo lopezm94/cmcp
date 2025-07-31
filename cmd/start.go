@@ -6,10 +6,14 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"cmcp/internal/config"
 	"cmcp/internal/mcp"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
-var manager = mcp.NewManager()
+var (
+	manager = mcp.NewManager()
+	verbose bool
+)
 
 var startCmd = &cobra.Command{
 	Use:   "start",
@@ -23,7 +27,7 @@ var startCmd = &cobra.Command{
 		}
 
 		if len(cfg.MCPServers) == 0 {
-			fmt.Println("No servers configured. Use 'cmcp config open' to add servers.")
+			color.Yellow("No servers configured. Use 'cmcp config open' to add servers.")
 			return nil
 		}
 
@@ -38,7 +42,7 @@ var startCmd = &cobra.Command{
 		}
 
 		if len(availableServers) == 0 {
-			fmt.Println("All registered servers are already running.")
+			color.Yellow("All registered servers are already running.")
 			return nil
 		}
 
@@ -54,22 +58,26 @@ var startCmd = &cobra.Command{
 		}
 
 		if len(selectedServers) == 0 {
-			fmt.Println("No servers selected.")
+			color.Yellow("No servers selected.")
 			return nil
 		}
 
 		// Start each selected server
 		var errors []error
 		var started []string
+		cyan := color.New(color.FgCyan)
+		green := color.New(color.FgGreen)
+		red := color.New(color.FgRed)
+		
 		for _, serverName := range selectedServers {
 			selectedServer, _ := cfg.FindServer(serverName)
-			fmt.Printf("Starting server '%s'...\n", serverName)
+			cyan.Printf("Starting server '%s'...\n", serverName)
 			
-			if err := manager.StartServer(serverName, selectedServer); err != nil {
+			if err := manager.StartServer(serverName, selectedServer, verbose); err != nil {
 				errors = append(errors, fmt.Errorf("failed to start '%s': %w", serverName, err))
 			} else {
 				started = append(started, serverName)
-				fmt.Printf("✓ Successfully started server '%s'\n", serverName)
+				green.Printf("✓ Successfully started server '%s'\n", serverName)
 			}
 		}
 
@@ -78,12 +86,16 @@ var startCmd = &cobra.Command{
 		}
 		
 		if len(errors) > 0 {
-			fmt.Printf("\nErrors occurred:\n")
+			red.Printf("\nErrors occurred:\n")
 			for _, err := range errors {
-				fmt.Printf("  • %v\n", err)
+				red.Printf("  • %v\n", err)
 			}
 		}
 
 		return nil
 	},
+}
+
+func init() {
+	startCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show verbose output including command details")
 }

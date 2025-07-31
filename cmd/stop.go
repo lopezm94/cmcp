@@ -5,8 +5,11 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"cmcp/internal/config"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
+
+var stopVerbose bool
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
@@ -29,7 +32,7 @@ var stopCmd = &cobra.Command{
 		}
 
 		if len(runningServers) == 0 {
-			fmt.Println("No servers from your config are currently in Claude.")
+			color.Yellow("No servers from your config are currently in Claude.")
 			return nil
 		}
 
@@ -50,21 +53,25 @@ var stopCmd = &cobra.Command{
 		}
 
 		if len(selectedServers) == 0 {
-			fmt.Println("No servers selected.")
+			color.Yellow("No servers selected.")
 			return nil
 		}
 
 		// Stop each selected server
 		var errors []error
 		var stopped []string
+		cyan := color.New(color.FgCyan)
+		green := color.New(color.FgGreen)
+		red := color.New(color.FgRed)
+		
 		for _, serverName := range selectedServers {
-			fmt.Printf("Stopping server '%s'...\n", serverName)
+			cyan.Printf("Stopping server '%s'...\n", serverName)
 			
-			if err := manager.StopServer(serverName); err != nil {
+			if err := manager.StopServer(serverName, stopVerbose); err != nil {
 				errors = append(errors, fmt.Errorf("failed to stop '%s': %w", serverName, err))
 			} else {
 				stopped = append(stopped, serverName)
-				fmt.Printf("✓ Successfully stopped server '%s'\n", serverName)
+				green.Printf("✓ Successfully stopped server '%s'\n", serverName)
 			}
 		}
 
@@ -73,12 +80,16 @@ var stopCmd = &cobra.Command{
 		}
 		
 		if len(errors) > 0 {
-			fmt.Printf("\nErrors occurred:\n")
+			red.Printf("\nErrors occurred:\n")
 			for _, err := range errors {
-				fmt.Printf("  • %v\n", err)
+				red.Printf("  • %v\n", err)
 			}
 		}
 
 		return nil
 	},
+}
+
+func init() {
+	stopCmd.Flags().BoolVarP(&stopVerbose, "verbose", "v", false, "Show verbose output including command details")
 }

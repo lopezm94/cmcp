@@ -113,16 +113,16 @@ func (c *Config) UpdateServerEnv(name string, env map[string]string) error {
 	if !exists {
 		return fmt.Errorf("server '%s' not found", name)
 	}
-	
+
 	if server.Env == nil {
 		server.Env = make(map[string]string)
 	}
-	
+
 	// Merge environment variables
 	for k, v := range env {
 		server.Env[k] = v
 	}
-	
+
 	c.MCPServers[name] = server
 	return Save(c)
 }

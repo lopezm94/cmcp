@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/AlecAivazis/survey/v2"
 	"cmcp/internal/config"
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -15,9 +15,9 @@ var (
 )
 
 var stopCmd = &cobra.Command{
-	Use:   "stop",
-	Short: "Stop running MCP servers",
-	Long:  `Stop one or more running MCP servers. Shows only servers that are currently running.`,
+	Use:          "stop",
+	Short:        "Stop running MCP servers",
+	Long:         `Stop one or more running MCP servers. Shows only servers that are currently running.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config to get our registered servers
@@ -65,26 +65,27 @@ var stopCmd = &cobra.Command{
 			yellow := color.New(color.FgYellow)
 			yellow.Println("Would execute the following commands:")
 			fmt.Println()
-			
+
 			for _, serverName := range selectedServers {
 				command := builder.BuildStopCommand(serverName)
 				fmt.Printf("$ %s\n", command)
 			}
 			return nil
 		}
-		
+
 		// Stop each selected server
 		var errors []error
 		var stopped []string
 		cyan := color.New(color.FgCyan)
 		green := color.New(color.FgGreen)
 		red := color.New(color.FgRed)
-		
+
 		for _, serverName := range selectedServers {
 			cyan.Printf("Stopping server '%s'...\n", serverName)
-			
+
 			if err := builder.StopServer(serverName, stopVerbose); err != nil {
-				errors = append(errors, fmt.Errorf("failed to stop '%s': %w", serverName, err))
+				red.Printf("✗ Failed to stop server '%s': %v\n", serverName, err)
+				errors = append(errors, fmt.Errorf("%s", serverName))
 			} else {
 				stopped = append(stopped, serverName)
 				green.Printf("✓ Successfully stopped server '%s'\n", serverName)
@@ -94,9 +95,9 @@ var stopCmd = &cobra.Command{
 		if len(stopped) > 0 {
 			fmt.Printf("\nStopped %d server(s): %v\n", len(stopped), stopped)
 		}
-		
+
 		if len(errors) > 0 {
-			red.Printf("\nErrors occurred:\n")
+			red.Printf("\nFailed to stop %d server(s):\n", len(errors))
 			for _, err := range errors {
 				red.Printf("  • %v\n", err)
 			}

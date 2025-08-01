@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"cmcp/internal/config"
 	"github.com/fatih/color"
@@ -29,15 +29,41 @@ var configRmCmd = &cobra.Command{
 		}
 
 		if len(cfg.MCPServers) == 0 {
-			color.Yellow("No servers configured")
+			yellow := color.New(color.FgYellow).SprintFunc()
+			gray := color.New(color.FgHiBlack).SprintFunc()
+			fmt.Printf("%s\n", yellow("No servers configured"))
+			fmt.Printf("%s %s\n", gray("→"), gray("Use 'cmcp config open' to add servers"))
 			return nil
 		}
 
+		// Color functions
+		cyan := color.New(color.FgCyan).SprintFunc()
+		green := color.New(color.FgGreen).SprintFunc()
+		red := color.New(color.FgRed).SprintFunc()
+		gray := color.New(color.FgHiBlack).SprintFunc()
+
+		// Get server names and check which are running
 		serverNames := cfg.GetServerNames()
+		runningServers := make(map[string]bool)
+		for _, name := range serverNames {
+			if builder.IsRunning(name) {
+				runningServers[name] = true
+			}
+		}
+
+		// Create colored items for the select prompt
+		items := make([]string, len(serverNames))
+		for i, name := range serverNames {
+			if runningServers[name] {
+				items[i] = fmt.Sprintf("%s %s %s", green("●"), name, gray("(running)"))
+			} else {
+				items[i] = fmt.Sprintf("%s %s", gray("○"), name)
+			}
+		}
 
 		prompt := promptui.Select{
-			Label: "Select server to remove",
-			Items: serverNames,
+			Label: cyan("Select server to remove"),
+			Items: items,
 		}
 
 		idx, _, err := prompt.Run()
@@ -47,8 +73,14 @@ var configRmCmd = &cobra.Command{
 
 		serverName := serverNames[idx]
 
+		// Show warning if server is running
+		if runningServers[serverName] {
+			fmt.Printf("\n%s %s\n", red("⚠"), red("Warning: This server is currently running"))
+			fmt.Printf("%s\n\n", gray("It will be stopped if you proceed"))
+		}
+
 		confirmPrompt := promptui.Prompt{
-			Label:     fmt.Sprintf("Are you sure you want to remove '%s'", serverName),
+			Label:     fmt.Sprintf("Are you sure you want to remove %s", cyan(serverName)),
 			IsConfirm: true,
 		}
 
@@ -57,18 +89,25 @@ var configRmCmd = &cobra.Command{
 			return nil
 		}
 
+		// Stop server if running
+		if runningServers[serverName] {
+			fmt.Printf("%s %s\n", gray("→"), gray("Stopping server..."))
+			builder.StopServer(serverName, false)
+		}
+
 		if err := cfg.RemoveServer(serverName); err != nil {
 			return err
 		}
 
-		color.Green("Successfully removed server '%s'\n", serverName)
+		fmt.Printf("\n%s %s\n", green("✓"), green(fmt.Sprintf("Successfully removed server '%s'", serverName)))
 		return nil
 	},
 }
 
 var configListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all configured MCP servers",
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List all configured MCP servers",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -80,16 +119,61 @@ var configListCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tCOMMAND")
-		for name, server := range cfg.MCPServers {
-			cmd := server.Command
-			if len(server.Args) > 0 {
-				cmd = fmt.Sprintf("%s %s", server.Command, strings.Join(server.Args, " "))
+		// Color functions
+		blue := color.New(color.FgBlue).SprintFunc()
+		green := color.New(color.FgGreen).SprintFunc()
+		yellow := color.New(color.FgYellow).SprintFunc()
+		gray := color.New(color.FgHiBlack).SprintFunc()
+		bold := color.New(color.Bold).SprintFunc()
+
+		// Get server names and check which are running
+		runningServers := make(map[string]bool)
+		for name := range cfg.MCPServers {
+			if builder.IsRunning(name) {
+				runningServers[name] = true
 			}
-			fmt.Fprintf(w, "%s\t%s\n", name, cmd)
 		}
-		w.Flush()
+
+		// Show summary first
+		runningCount := len(runningServers)
+		totalCount := len(cfg.MCPServers)
+		
+		fmt.Printf("%s %s", bold(fmt.Sprintf("%d", totalCount)), gray("server(s) configured"))
+		if runningCount > 0 {
+			fmt.Printf(" • %s %s", green(fmt.Sprintf("%d", runningCount)), gray("running"))
+		}
+		fmt.Println("\n")
+
+		// List servers
+		for name, server := range cfg.MCPServers {
+			// Status indicator and name
+			if runningServers[name] {
+				fmt.Printf("%s %s\n", green("●"), bold(name))
+			} else {
+				fmt.Printf("%s %s\n", gray("○"), bold(name))
+			}
+
+			// Command on the next line with indentation
+			fmt.Printf("  %s", blue(server.Command))
+			if len(server.Args) > 0 {
+				fmt.Printf(" %s", strings.Join(server.Args, " "))
+			}
+			fmt.Println()
+
+			// Environment variables if any
+			if len(server.Env) > 0 {
+				fmt.Printf("  %s", gray("env:"))
+				for i, key := range getSortedKeys(server.Env) {
+					if i > 0 {
+						fmt.Printf(",")
+					}
+					fmt.Printf(" %s", yellow(key))
+				}
+				fmt.Println()
+			}
+			
+			fmt.Println() // Empty line between servers
+		}
 
 		return nil
 	},
@@ -104,7 +188,7 @@ var configOpenCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get config path: %w", err)
 		}
-		
+
 		// Ensure config file exists by loading it
 		_, err = config.Load()
 		if err != nil {
@@ -135,7 +219,7 @@ var configOpenCmd = &cobra.Command{
 func openInEditor(configPath, serverName string) error {
 	// Check if nano is available, fallback to other editors
 	var editorCmd *exec.Cmd
-	
+
 	if _, err := exec.LookPath("nano"); err == nil {
 		if serverName != "" {
 			// Search for the server name in nano
@@ -163,6 +247,15 @@ func openInEditor(configPath, serverName string) error {
 	editorCmd.Stderr = os.Stderr
 
 	return editorCmd.Run()
+}
+
+func getSortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func init() {

@@ -45,7 +45,7 @@ var resetCmd = &cobra.Command{
 			yellow := color.New(color.FgYellow)
 			yellow.Println("\nWould execute the following commands:")
 			fmt.Println()
-			
+
 			// Build commands for all running servers
 			commands := builder.BuildResetCommands(runningServers)
 			for _, cmd := range commands {

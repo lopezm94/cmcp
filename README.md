@@ -10,6 +10,7 @@ A command-line tool for managing Model Context Protocol (MCP) servers on your sy
 - **Manual config editing** - Open config file directly in nano with `cmcp config open`
 - **Shell autocompletion** - Full command completion support for bash, zsh, fish, and PowerShell
 - **Standard MCP format** - Compatible with Claude Desktop and other MCP tools
+- **Advanced Troubleshooting** - Built-in diagnostics help identify and fix MCP connection issues
 
 ## Requirements
 
@@ -165,6 +166,12 @@ Edit your config file to add servers like these:
 # Start a server (interactive selection, registers with Claude)
 cmcp start
 
+# Start with verbose output to see commands and responses
+cmcp start -v
+
+# Start with debug mode for detailed diagnostics when troubleshooting
+cmcp start -d
+
 # Stop a running server (interactive selection, unregisters from Claude)
 cmcp stop
 
@@ -174,6 +181,42 @@ cmcp online
 # Stop all running servers (unregisters all from Claude)
 cmcp reset
 ```
+
+### Troubleshooting MCP Connections
+
+cmcp includes advanced diagnostics to help you identify and fix MCP server connection issues:
+
+```bash
+# Use debug mode to get detailed diagnostics when a server fails to start
+cmcp start --debug
+# or
+cmcp start -d
+```
+
+The debug mode provides intelligent diagnostics for common issues:
+
+- **Docker servers**: Checks if Docker daemon is running, image availability, environment variables
+- **Node.js servers**: Verifies node/npx installation, script existence, dependencies
+- **Python servers**: Checks Python installation, script availability, requirements
+- **General issues**: Permission errors, port conflicts, missing environment variables
+
+Example output when troubleshooting:
+```
+Starting server 'github'...
+✗ Failed to start server 'github':
+server 'github' failed to start: failed to connect
+
+Health Check: github: docker run -i --rm -e GITHUB_PERSONAL_ACCESS_TOKEN ghcr.io/github/github-mcp-server - ✗ Failed to connect
+
+Error Output:
+docker: Cannot connect to the Docker daemon at unix:///var/run/docker.sock.
+
+Possible solutions:
+  1. Docker daemon is not running. Please start Docker Desktop or the Docker service.
+  2. Check that required environment variables are set in your shell
+```
+
+**Security Note**: All sensitive information (API keys, tokens, passwords) are automatically masked in verbose and debug output to prevent accidental exposure.
 
 
 ### Shell Completion

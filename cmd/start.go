@@ -14,13 +14,14 @@ var (
 	builder = mcp.NewClaudeCmdBuilder()
 	verbose bool
 	dryRun  bool
-	debug   bool
 )
 
 var startCmd = &cobra.Command{
-	Use:          "start",
-	Short:        "Start MCP servers",
-	Long:         `Start one or more MCP servers from your registered servers. Shows only servers that are not currently running.`,
+	Use:          "start [server-name...]",
+	Short:        "Start MCP servers in Claude for this project",
+	Long:         `Start one or more MCP servers from your registered servers in Claude for the current project. 
+You can specify server names as arguments or run without arguments for interactive selection.
+Only servers that are not currently running will be started.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -33,30 +34,48 @@ var startCmd = &cobra.Command{
 			return nil
 		}
 
-		var availableServers []string
-		var serverLabels []string
-
-		for name := range cfg.MCPServers {
-			if !builder.IsRunning(name) {
-				availableServers = append(availableServers, name)
-				serverLabels = append(serverLabels, name)
-			}
-		}
-
-		if len(availableServers) == 0 {
-			color.Yellow("All registered servers are already running.")
-			return nil
-		}
-
 		var selectedServers []string
-		prompt := &survey.MultiSelect{
-			Message: "Select servers to start (use space to select, enter to confirm):",
-			Options: serverLabels,
-		}
 
-		err = survey.AskOne(prompt, &selectedServers, survey.WithPageSize(10))
-		if err != nil {
-			return err
+		// If server names are provided as arguments, use those
+		if len(args) > 0 {
+			for _, serverName := range args {
+				// Check if server exists in config
+				if _, exists := cfg.MCPServers[serverName]; !exists {
+					return fmt.Errorf("server '%s' not found in configuration", serverName)
+				}
+				// Check if server is not already running
+				if builder.IsRunning(serverName) {
+					color.Yellow("Server '%s' is already running.", serverName)
+					continue
+				}
+				selectedServers = append(selectedServers, serverName)
+			}
+		} else {
+			// Interactive mode - show available servers
+			var availableServers []string
+			var serverLabels []string
+
+			for name := range cfg.MCPServers {
+				if !builder.IsRunning(name) {
+					availableServers = append(availableServers, name)
+					serverLabels = append(serverLabels, name)
+				}
+			}
+
+			if len(availableServers) == 0 {
+				color.Yellow("All registered servers are already running.")
+				return nil
+			}
+
+			prompt := &survey.MultiSelect{
+				Message: "Select servers to start (use space to select, enter to confirm):",
+				Options: serverLabels,
+			}
+
+			err = survey.AskOne(prompt, &selectedServers, survey.WithPageSize(10))
+			if err != nil {
+				return err
+			}
 		}
 
 		if len(selectedServers) == 0 {
@@ -95,16 +114,11 @@ var startCmd = &cobra.Command{
 
 		for _, serverName := range selectedServers {
 			selectedServer, _ := cfg.FindServer(serverName)
-			cyan.Printf("Starting server '%s'...\n", serverName)
+			cyan.Printf("Starting server '%s' in Claude for this project...\n", serverName)
 
-			if err := builder.StartServer(serverName, selectedServer, verbose || debug); err != nil {
-				if debug {
-					// Show full error with diagnostics
-					red.Printf("✗ Server '%s' diagnostics:\n%v\n", serverName, err)
-				} else {
-					// Show concise error
-					red.Printf("✗ Failed to start server '%s': %v\n", serverName, err)
-				}
+			if err := builder.StartServer(serverName, selectedServer, verbose); err != nil {
+				// Show concise error (verbose mode will have shown debug output already)
+				red.Printf("✗ Failed to start server '%s': %v\n", serverName, err)
 				errors = append(errors, fmt.Errorf("%s", serverName))
 			} else {
 				started = append(started, serverName)
@@ -128,8 +142,7 @@ var startCmd = &cobra.Command{
 }
 
 func init() {
-	startCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show verbose output including command details")
+	startCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show debug output directly in the shell instead of saving to temp file")
 	startCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Show commands that would be executed without running them")
-	startCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Show detailed diagnostic information for failures")
 }
 

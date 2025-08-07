@@ -15,20 +15,6 @@ if command -v cmcp >/dev/null 2>&1; then
     print_detail "Current: $CURRENT_VERSION"
     echo
     
-    # Check for running servers if upgrading
-    RUNNING_SERVERS=$(cmcp online 2>/dev/null | grep -v "No servers" | grep -v "No MCP servers" || true)
-    if [[ -n "$RUNNING_SERVERS" ]]; then
-        print_warning "Found running MCP servers"
-        print_detail "It's recommended to stop them before upgrading"
-        echo -en "   ${YELLOW}Stop all running servers? (y/N): ${RESET}"
-        read -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_detail "Stopping servers..."
-            cmcp reset <<< "y" >/dev/null 2>&1 || true
-            print_success "Servers stopped"
-        fi
-    fi
     echo
 else
     print_header "🚀 Installing cmcp..."

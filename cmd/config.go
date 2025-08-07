@@ -142,7 +142,8 @@ var configListCmd = &cobra.Command{
 		if runningCount > 0 {
 			fmt.Printf(" • %s %s", green(fmt.Sprintf("%d", runningCount)), gray("running"))
 		}
-		fmt.Println("\n")
+		fmt.Println()
+		fmt.Println()
 
 		// List servers
 		for name, server := range cfg.MCPServers {

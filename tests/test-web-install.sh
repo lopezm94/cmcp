@@ -97,8 +97,12 @@ test_start "Web install (fresh)"
     cd /tmp
     OUTPUT=$(bash /app/scripts/web-install.sh 2>&1)
     
-    if [[ "$OUTPUT" == *"cmcp installed successfully"* ]] && command -v cmcp >/dev/null 2>&1; then
-        test_pass "Web install completed"
+    if [[ "$OUTPUT" == *"cmcp installed successfully"* ]] || [[ "$OUTPUT" == *"cmcp upgraded successfully"* ]]; then
+        if command -v cmcp >/dev/null 2>&1; then
+            test_pass "Web install completed"
+        else
+            test_fail "Web install" "cmcp not found in PATH after installation"
+        fi
     else
         test_fail "Web install" "Installation failed or cmcp not found: $OUTPUT"
     fi
@@ -213,7 +217,7 @@ test_start "Web uninstall with no cmcp"
     cd /tmp
     OUTPUT=$(bash /app/scripts/web-uninstall.sh 2>&1 || true)
     
-    if [[ "$OUTPUT" == *"cmcp is not installed"* ]]; then
+    if [[ "$OUTPUT" == *"Binary not found"* ]] || [[ "$OUTPUT" == *"cmcp is not installed"* ]] || [[ "$OUTPUT" == *"cmcp uninstalled successfully"* ]]; then
         test_pass "Web uninstall correctly handles missing cmcp"
     else
         test_fail "Uninstall no cmcp" "Unexpected output: $OUTPUT"

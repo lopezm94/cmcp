@@ -21,6 +21,28 @@ go test ./...
 
 # Run unit tests locally (fast)
 ./test-unit.sh
+
+# Run specific test package/function
+go test ./... -v -run TestFunctionName
+```
+
+### Selective Test Running
+```bash
+# Run all tests (default)
+./test.sh
+
+# Run only specific test(s)
+./test.sh logging                        # Run only logging test
+./test.sh unit logging                   # Run unit and logging tests
+./test.sh comprehensive install web      # Run comprehensive, install, and web tests
+
+# Available test names:
+# - unit: Go unit tests
+# - comprehensive: Comprehensive functionality tests
+# - install: Install/uninstall script tests
+# - logging: Automatic logging tests
+# - web: Web install/uninstall tests
+# - online: Online command tests
 ```
 
 ### Installation
@@ -81,6 +103,10 @@ Uses standard MCP server configuration format:
 - **Unit Tests**: Test individual components (claude_cmd_builder_test.go, security_test.go, diagnostics_test.go)
 - **Integration Tests**: Run in containers to test full command flow
 - **Install Tests**: Verify installation/uninstall scripts work correctly
+- **Never read sensitive files**: Ensure you are not reading files from `~/.cmcp/config.json` or any other sensitive files in the user's computer, unless explicitly allowed by the user or if isolated in a container or similar.
+- **Test Isolation**: 
+  * Everytime a new test is added, it must run inside a docker container (or isolated environment)
+  * All new tests must be added to the `test.sh` file to ensure consistent test execution
 
 ## Important Notes
 

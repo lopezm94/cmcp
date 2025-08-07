@@ -15,9 +15,11 @@ var (
 )
 
 var stopCmd = &cobra.Command{
-	Use:          "stop",
-	Short:        "Stop running MCP servers",
-	Long:         `Stop one or more running MCP servers. Shows only servers that are currently running.`,
+	Use:          "stop [server-name...]",
+	Short:        "Stop running MCP servers in Claude for this project",
+	Long:         `Stop one or more running MCP servers in Claude for the current project.
+You can specify server names as arguments or run without arguments for interactive selection.
+Only servers that are currently running will be stopped.`,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config to get our registered servers
@@ -26,33 +28,50 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Find which servers from our config are in Claude
-		var runningServers []string
-		for name := range cfg.MCPServers {
-			if builder.IsRunning(name) {
-				runningServers = append(runningServers, name)
-			}
-		}
-
-		if len(runningServers) == 0 {
-			color.Yellow("No servers from your config are currently in Claude.")
-			return nil
-		}
-
-		var serverLabels []string
-		for _, name := range runningServers {
-			serverLabels = append(serverLabels, name)
-		}
-
 		var selectedServers []string
-		prompt := &survey.MultiSelect{
-			Message: "Select servers to stop (use space to select, enter to confirm):",
-			Options: serverLabels,
-		}
 
-		err = survey.AskOne(prompt, &selectedServers, survey.WithPageSize(10))
-		if err != nil {
-			return err
+		// If server names are provided as arguments, use those
+		if len(args) > 0 {
+			for _, serverName := range args {
+				// Check if server exists in config
+				if _, exists := cfg.MCPServers[serverName]; !exists {
+					return fmt.Errorf("server '%s' not found in configuration", serverName)
+				}
+				// Check if server is actually running
+				if !builder.IsRunning(serverName) {
+					color.Yellow("Server '%s' is not running.", serverName)
+					continue
+				}
+				selectedServers = append(selectedServers, serverName)
+			}
+		} else {
+			// Interactive mode - find which servers from our config are in Claude
+			var runningServers []string
+			for name := range cfg.MCPServers {
+				if builder.IsRunning(name) {
+					runningServers = append(runningServers, name)
+				}
+			}
+
+			if len(runningServers) == 0 {
+				color.Yellow("No servers from your config are currently in Claude.")
+				return nil
+			}
+
+			var serverLabels []string
+			for _, name := range runningServers {
+				serverLabels = append(serverLabels, name)
+			}
+
+			prompt := &survey.MultiSelect{
+				Message: "Select servers to stop (use space to select, enter to confirm):",
+				Options: serverLabels,
+			}
+
+			err = survey.AskOne(prompt, &selectedServers, survey.WithPageSize(10))
+			if err != nil {
+				return err
+			}
 		}
 
 		if len(selectedServers) == 0 {
@@ -81,7 +100,7 @@ var stopCmd = &cobra.Command{
 		red := color.New(color.FgRed)
 
 		for _, serverName := range selectedServers {
-			cyan.Printf("Stopping server '%s'...\n", serverName)
+			cyan.Printf("Stopping server '%s' in Claude for this project...\n", serverName)
 
 			if err := builder.StopServer(serverName, stopVerbose); err != nil {
 				red.Printf("✗ Failed to stop server '%s': %v\n", serverName, err)

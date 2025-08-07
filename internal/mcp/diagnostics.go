@@ -219,22 +219,57 @@ func FormatDiagnostics(diag *DiagnosticInfo) string {
 	sb.WriteString("Connection failed\n")
 	
 	if diag.HealthCheck != "" {
-		sb.WriteString(fmt.Sprintf("\nHealth check output:\n  %s\n", diag.HealthCheck))
+		sb.WriteString(fmt.Sprintf("\n\033[1;33mHealth check output:\033[0m\n  %s\n", diag.HealthCheck))
 	}
 	
 	if diag.StdErr != "" {
 		// Mask sensitive information before displaying
 		maskedErr := maskSensitiveOutput(diag.StdErr)
-		sb.WriteString(fmt.Sprintf("\nServer error:\n%s\n", maskedErr))
+		sb.WriteString(fmt.Sprintf("\n\033[1;31mServer error:\033[0m\n%s\n", maskedErr))
 	} else if diag.Error != nil {
-		sb.WriteString(fmt.Sprintf("\nError: %v\n", diag.Error))
+		sb.WriteString(fmt.Sprintf("\n\033[1;31mError:\033[0m %v\n", diag.Error))
 	}
 	
 	if len(diag.Suggestions) > 0 {
-		sb.WriteString("\nPossible solutions:\n")
+		sb.WriteString("\n\033[1;35mPossible solutions:\033[0m\n")
 		for i, suggestion := range diag.Suggestions {
 			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, suggestion))
 		}
+	}
+	
+	return sb.String()
+}
+
+// FormatDiagnosticsWithDebugLog formats diagnostic information with optional debug log path
+func FormatDiagnosticsWithDebugLog(diag *DiagnosticInfo, debugLogPath string) string {
+	var sb strings.Builder
+	
+	// Start with a clear indication this is a connection failure
+	sb.WriteString("Connection failed\n")
+	
+	if diag.HealthCheck != "" {
+		sb.WriteString(fmt.Sprintf("\n\033[1;33mHealth check output:\033[0m\n  %s\n", diag.HealthCheck))
+	}
+	
+	if diag.StdErr != "" {
+		// Mask sensitive information before displaying
+		maskedErr := maskSensitiveOutput(diag.StdErr)
+		sb.WriteString(fmt.Sprintf("\n\033[1;31mServer error:\033[0m\n%s\n", maskedErr))
+	} else if diag.Error != nil {
+		sb.WriteString(fmt.Sprintf("\n\033[1;31mError:\033[0m %v\n", diag.Error))
+	}
+	
+	if len(diag.Suggestions) > 0 {
+		sb.WriteString("\n\033[1;35mPossible solutions:\033[0m\n")
+		for i, suggestion := range diag.Suggestions {
+			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, suggestion))
+		}
+	}
+	
+	// Add debug log path as a separate, clearly marked section
+	if debugLogPath != "" {
+		sb.WriteString(fmt.Sprintf("\n\033[0;36mℹ Debug log saved to:\033[0m\n  %s\n", debugLogPath))
+		sb.WriteString("\033[0;90m  View this file for detailed connection diagnostics and Claude CLI debug output\033[0m\n")
 	}
 	
 	return sb.String()

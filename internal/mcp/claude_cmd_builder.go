@@ -3,8 +3,10 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,9 +18,41 @@ type ClaudeCmdBuilder struct {
 	// Builder for Claude CLI commands
 }
 
+// ServerStatus represents the status of a server in Claude
+type ServerStatus struct {
+	Name      string
+	Command   string
+	Status    string // "connected", "failed", "unknown"
+	InConfig  bool
+}
+
 func NewClaudeCmdBuilder() *ClaudeCmdBuilder {
 	return &ClaudeCmdBuilder{}
 }
+
+// createDebugLogFile creates a temp file for debug output and returns the path
+func (b *ClaudeCmdBuilder) createDebugLogFile(operation string) (string, error) {
+	// Create temp directory for cmcp debug logs
+	tempDir := filepath.Join(os.TempDir(), "cmcp-debug")
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create debug temp dir: %w", err)
+	}
+
+	// Create temp file with timestamp and operation name
+	timestamp := time.Now().Format("20060102-150405")
+	filename := fmt.Sprintf("cmcp-%s-%s.log", operation, timestamp)
+	logPath := filepath.Join(tempDir, filename)
+
+	// Create the file
+	file, err := os.Create(logPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create debug log file: %w", err)
+	}
+	file.Close()
+
+	return logPath, nil
+}
+
 
 // findClaude returns the claude command path
 func findClaude() string {
@@ -31,6 +65,13 @@ func findClaude() string {
 func (b *ClaudeCmdBuilder) StartServer(name string, server *config.MCPServer, verbose bool) error {
 	var args []string
 	var commandStr string
+
+	// Create debug log file only if not verbose
+	var debugLogPath string
+	var debugLogErr error
+	if !verbose {
+		debugLogPath, debugLogErr = b.createDebugLogFile("start-" + name)
+	}
 
 	// Decide whether to use add-json or regular add
 	useAddJSON := len(server.Env) > 0
@@ -56,15 +97,33 @@ func (b *ClaudeCmdBuilder) StartServer(name string, server *config.MCPServer, ve
 		}
 	}
 
+	// Always add --debug flag for better error diagnostics
+	args = append([]string{args[0], args[1], "--debug"}, args[2:]...)
+
 	// Execute claude mcp add/add-json
 	cmd := exec.Command(findClaude(), args...)
 
-	// Capture both stdout and stderr
+	// Capture output or show directly based on verbose flag
 	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	if verbose {
+		// In verbose mode, show output directly
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		fmt.Println()  // Add newline before debug output
+	} else {
+		// In normal mode, capture output for logging
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+	}
 
 	err := cmd.Run()
+
+	// Write debug output to log file only if not verbose
+	if !verbose && debugLogErr == nil {
+		debugContent := fmt.Sprintf("Command: %s\nExit Code: %v\n\nSTDOUT:\n%s\n\nSTDERR:\n%s\n", 
+			strings.Join(args, " "), err, stdout.String(), stderr.String())
+		ioutil.WriteFile(debugLogPath, []byte(debugContent), 0644)
+	}
 
 	// Handle output based on verbose flag and error state
 	if err != nil {
@@ -76,15 +135,25 @@ func (b *ClaudeCmdBuilder) StartServer(name string, server *config.MCPServer, ve
 				commandStr = b.BuildStartCommand(name, server)
 			}
 			fmt.Printf("  Command failed: %s\n", commandStr)
+			
+			if stderr.Len() > 0 {
+				fmt.Fprintf(os.Stderr, "%s", stderr.String())
+			}
+
+			// Include debug log path in error message if available
+			errorMsg := fmt.Sprintf("failed to add server '%s' to Claude", name)
+			if debugLogErr == nil {
+				errorMsg += fmt.Sprintf("\n\n\033[0;36mℹ Debug log saved to:\033[0m\n  %s\n\033[0;90m  View this file for detailed error information\033[0m", debugLogPath)
+			}
+			return fmt.Errorf(errorMsg)
+		} else {
+			// In verbose mode, error was already shown, just return simple error
+			return fmt.Errorf("failed to add server '%s' to Claude", name)
 		}
-		if stderr.Len() > 0 {
-			fmt.Fprintf(os.Stderr, "%s", stderr.String())
-		}
-		return fmt.Errorf("failed to add server '%s' to Claude", name)
 	}
 
-	// In verbose mode, parse and show only relevant info
-	if verbose && stdout.Len() > 0 {
+	// In non-verbose mode, parse and show only relevant info
+	if !verbose && stdout.Len() > 0 {
 		output := stdout.String()
 		lines := strings.Split(strings.TrimSpace(output), "\n")
 		for _, line := range lines {
@@ -95,15 +164,16 @@ func (b *ClaudeCmdBuilder) StartServer(name string, server *config.MCPServer, ve
 			// Show file modifications with indentation
 			if strings.Contains(line, "File modified:") {
 				fmt.Printf("  %s\n", line)
-			} else {
-				// Show other output as-is
-				fmt.Println(line)
 			}
 		}
 	}
 
 	// Verify server started successfully with diagnostics
-	if err := b.VerifyServerStartedWithDiagnostics(name, server); err != nil {
+	var verifyDebugPath string
+	if !verbose && debugLogErr == nil {
+		verifyDebugPath = debugLogPath
+	}
+	if err := b.VerifyServerStartedWithDiagnosticsVerbose(name, server, verbose, verifyDebugPath); err != nil {
 		return err
 	}
 
@@ -112,26 +182,79 @@ func (b *ClaudeCmdBuilder) StartServer(name string, server *config.MCPServer, ve
 
 // VerifyServerStarted checks if a server is actually running after being added
 func (b *ClaudeCmdBuilder) VerifyServerStarted(name string) error {
+	return b.VerifyServerStartedVerbose(name, false)
+}
+
+// VerifyServerStartedVerbose checks if a server is running with optional verbose output
+func (b *ClaudeCmdBuilder) VerifyServerStartedVerbose(name string, verbose bool) error {
 	// Give the server a moment to start
 	time.Sleep(500 * time.Millisecond)
 
+	// Create debug log file only if not verbose
+	var debugLogPath string
+	var debugLogErr error
+	if !verbose {
+		debugLogPath, debugLogErr = b.createDebugLogFile("verify-" + name)
+	}
+
 	// Try up to 3 times with increasing delays
 	for attempt := 0; attempt < 3; attempt++ {
-		// Run claude mcp list and check if server is connected
-		cmd := exec.Command(findClaude(), "mcp", "list")
-		output, err := cmd.Output()
+		// Run claude mcp list with debug and check if server is connected
+		cmd := exec.Command(findClaude(), "mcp", "list", "--debug")
+		
+		var output []byte
+		var err error
+		
+		if verbose {
+			// In verbose mode, show output directly
+			if attempt == 0 {
+				fmt.Println("\nVerifying server connection...")
+			}
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+		} else {
+			// In normal mode, capture output for logging
+			output, err = cmd.CombinedOutput()
+			
+			// Log the verification attempt if we have a debug log
+			if debugLogErr == nil {
+				debugContent := fmt.Sprintf("Verification attempt %d:\nCommand: claude mcp list --debug\nOutput:\n%s\nError: %v\n\n", 
+					attempt+1, string(output), err)
+				// Append to existing log file
+				file, appendErr := os.OpenFile(debugLogPath, os.O_APPEND|os.O_WRONLY, 0644)
+				if appendErr == nil {
+					file.WriteString(debugContent)
+					file.Close()
+				}
+			}
+		}
+
 		if err != nil {
+			if !verbose && debugLogErr == nil {
+				return fmt.Errorf("failed to list servers: %w\n\n\033[0;36mℹ Debug log saved to:\033[0m\n  %s\n\033[0;90m  View this file for detailed error information\033[0m", err, debugLogPath)
+			}
 			return fmt.Errorf("failed to list servers: %w", err)
 		}
 
 		// Parse the output to check server status
+		// For verbose mode, we need to re-run to capture output for parsing
+		if verbose {
+			cmd := exec.Command(findClaude(), "mcp", "list")
+			output, _ = cmd.Output()
+		}
+		
 		lines := strings.Split(string(output), "\n")
 		for _, line := range lines {
 			// Look for the server in the output
 			if strings.Contains(line, name+":") {
 				// Check if it shows as connected (✓) or failed (✗)
 				if strings.Contains(line, "✗") || strings.Contains(line, "Failed") {
-					return fmt.Errorf("failed to connect")
+					errorMsg := "failed to connect"
+					if !verbose && debugLogErr == nil {
+						errorMsg += fmt.Sprintf("\n\n\033[0;36mℹ Debug log saved to:\033[0m\n  %s\n\033[0;90m  View this file for detailed connection diagnostics\033[0m", debugLogPath)
+					}
+					return fmt.Errorf(errorMsg)
 				}
 				if strings.Contains(line, "✓") || strings.Contains(line, "Connected") {
 					return nil // Server is connected
@@ -146,12 +269,21 @@ func (b *ClaudeCmdBuilder) VerifyServerStarted(name string) error {
 	}
 
 	// After retries, assume failure
-	return fmt.Errorf("failed to connect after 3 attempts")
+	errorMsg := "failed to connect after 3 attempts"
+	if !verbose && debugLogErr == nil {
+		errorMsg += fmt.Sprintf("\n\n\033[0;36mℹ Debug log saved to:\033[0m\n  %s\n\033[0;90m  View this file for detailed connection diagnostics\033[0m", debugLogPath)
+	}
+	return fmt.Errorf(errorMsg)
 }
 
 // VerifyServerStartedWithDiagnostics checks if a server is running and provides diagnostics on failure
 func (b *ClaudeCmdBuilder) VerifyServerStartedWithDiagnostics(name string, server *config.MCPServer) error {
-	err := b.VerifyServerStarted(name)
+	return b.VerifyServerStartedWithDiagnosticsVerbose(name, server, false, "")
+}
+
+// VerifyServerStartedWithDiagnosticsVerbose checks if a server is running and provides diagnostics on failure
+func (b *ClaudeCmdBuilder) VerifyServerStartedWithDiagnosticsVerbose(name string, server *config.MCPServer, verbose bool, debugLogPath string) error {
+	err := b.VerifyServerStartedVerbose(name, verbose)
 	if err == nil {
 		return nil // Server started successfully
 	}
@@ -159,7 +291,13 @@ func (b *ClaudeCmdBuilder) VerifyServerStartedWithDiagnostics(name string, serve
 	// Get diagnostic information
 	diag, _ := GetServerDiagnostics(name, server.Command, server.Args)
 	if diag != nil {
-		diagInfo := FormatDiagnostics(diag)
+		var diagInfo string
+		if !verbose && debugLogPath != "" {
+			// Include debug log path in the diagnostic output
+			diagInfo = FormatDiagnosticsWithDebugLog(diag, debugLogPath)
+		} else {
+			diagInfo = FormatDiagnostics(diag)
+		}
 		if diagInfo != "" {
 			// Return just the diagnostic info, not the original error
 			return fmt.Errorf("%s", strings.TrimSpace(diagInfo))
@@ -175,39 +313,71 @@ func (b *ClaudeCmdBuilder) StopServer(name string, verbose bool) error {
 		return fmt.Errorf("server '%s' is not registered in Claude", name)
 	}
 
+	// Create debug log file only if not verbose
+	var debugLogPath string
+	var debugLogErr error
+	if !verbose {
+		debugLogPath, debugLogErr = b.createDebugLogFile("stop-" + name)
+	}
+
 	// Build the command
 	commandStr := b.BuildStopCommand(name)
-	args := []string{"mcp", "remove", name}
+	args := []string{"mcp", "remove", "--debug", name}
 
 	// Show command if verbose
 	if verbose {
 		fmt.Printf("  Command: %s\n", commandStr)
+		fmt.Println()  // Add newline before debug output
 	}
 
 	// Execute claude mcp remove
 	cmd := exec.Command(findClaude(), args...)
 
-	// Capture both stdout and stderr
+	// Capture output or show directly based on verbose flag
 	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	if verbose {
+		// In verbose mode, show output directly
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	} else {
+		// In normal mode, capture output for logging
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+	}
 
 	err := cmd.Run()
 
-	// Handle output based on verbose flag and error state
-	if err != nil {
-		// On error, show the full command and stderr
-		if !verbose {
-			fmt.Printf("  Command failed: %s\n", commandStr)
-		}
-		if stderr.Len() > 0 {
-			fmt.Fprintf(os.Stderr, "%s", stderr.String())
-		}
-		return fmt.Errorf("failed to remove server '%s' from Claude", name)
+	// Write debug output to log file only if not verbose
+	if !verbose && debugLogErr == nil {
+		debugContent := fmt.Sprintf("Command: %s\nExit Code: %v\n\nSTDOUT:\n%s\n\nSTDERR:\n%s\n", 
+			strings.Join(args, " "), err, stdout.String(), stderr.String())
+		ioutil.WriteFile(debugLogPath, []byte(debugContent), 0644)
 	}
 
-	// In verbose mode, parse and show only relevant info
-	if verbose && stdout.Len() > 0 {
+	// Handle output based on verbose flag and error state
+	if err != nil {
+		if !verbose {
+			// On error, show the full command and stderr
+			fmt.Printf("  Command failed: %s\n", commandStr)
+			
+			if stderr.Len() > 0 {
+				fmt.Fprintf(os.Stderr, "%s", stderr.String())
+			}
+
+			// Include debug log path in error message if available
+			errorMsg := fmt.Sprintf("failed to remove server '%s' from Claude", name)
+			if debugLogErr == nil {
+				errorMsg += fmt.Sprintf("\n\n\033[0;36mℹ Debug log saved to:\033[0m\n  %s\n\033[0;90m  View this file for detailed error information\033[0m", debugLogPath)
+			}
+			return fmt.Errorf(errorMsg)
+		} else {
+			// In verbose mode, error was already shown
+			return fmt.Errorf("failed to remove server '%s' from Claude", name)
+		}
+	}
+
+	// In non-verbose mode, parse and show only relevant info
+	if !verbose && stdout.Len() > 0 {
 		output := stdout.String()
 		lines := strings.Split(strings.TrimSpace(output), "\n")
 		for _, line := range lines {
@@ -218,9 +388,6 @@ func (b *ClaudeCmdBuilder) StopServer(name string, verbose bool) error {
 			// Show file modifications with indentation
 			if strings.Contains(line, "File modified:") {
 				fmt.Printf("  %s\n", line)
-			} else {
-				// Show other output as-is
-				fmt.Println(line)
 			}
 		}
 	}
@@ -267,6 +434,111 @@ func (b *ClaudeCmdBuilder) IsRunning(name string) bool {
 	err := cmd.Run()
 	// If the command succeeds, the server exists in Claude
 	return err == nil
+}
+
+// IsRunningWithDebugLog checks if server is running and optionally logs to debug file
+func (b *ClaudeCmdBuilder) IsRunningWithDebugLog(name string, logDebug bool) (bool, string) {
+	if !logDebug {
+		return b.IsRunning(name), ""
+	}
+
+	// Create debug log file for this check
+	debugLogPath, debugLogErr := b.createDebugLogFile("check-" + name)
+
+	// Check if server is registered in Claude by running claude mcp get with debug
+	cmd := exec.Command(findClaude(), "mcp", "get", "--debug", name)
+	output, err := cmd.CombinedOutput()
+
+	// Log the check if we have a debug log
+	if debugLogErr == nil {
+		debugContent := fmt.Sprintf("Command: claude mcp get --debug %s\nOutput:\n%s\nError: %v\n", 
+			name, string(output), err)
+		ioutil.WriteFile(debugLogPath, []byte(debugContent), 0644)
+	}
+
+	logPath := ""
+	if debugLogErr == nil {
+		logPath = debugLogPath
+	}
+
+	// If the command succeeds, the server exists in Claude
+	return err == nil, logPath
+}
+
+// GetServerStatuses parses claude mcp list output and returns server statuses
+func (b *ClaudeCmdBuilder) GetServerStatuses(cfg *config.Config) ([]ServerStatus, error) {
+	// Execute claude mcp list and capture output
+	cmd := exec.Command(findClaude(), "mcp", "list")
+	output, err := cmd.CombinedOutput()
+	if err != nil && len(output) == 0 {
+		return nil, fmt.Errorf("failed to list servers: %w", err)
+	}
+
+	var servers []ServerStatus
+	lines := strings.Split(string(output), "\n")
+	
+	// Skip the "Checking MCP server health..." line if present
+	startIndex := 0
+	for i, line := range lines {
+		if strings.Contains(line, "Checking MCP server health") {
+			startIndex = i + 1
+			// Skip empty line after header
+			if startIndex < len(lines) && strings.TrimSpace(lines[startIndex]) == "" {
+				startIndex++
+			}
+			break
+		}
+	}
+	
+	// Parse each server line
+	for i := startIndex; i < len(lines); i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		
+		// Parse lines like: "test-fail: nonexistent-command --fail - ✗ Failed to connect"
+		// or: "github: docker run ... - ✓ Connected"
+		parts := strings.Split(line, ": ")
+		if len(parts) < 2 {
+			continue
+		}
+		
+		serverName := strings.TrimSpace(parts[0])
+		remainder := strings.Join(parts[1:], ": ")
+		
+		// Find the last " - " to separate command from status
+		lastDashIndex := strings.LastIndex(remainder, " - ")
+		if lastDashIndex == -1 {
+			continue
+		}
+		
+		command := strings.TrimSpace(remainder[:lastDashIndex])
+		statusPart := strings.TrimSpace(remainder[lastDashIndex+3:])
+		
+		// Determine status
+		status := "unknown"
+		if strings.Contains(statusPart, "✓") || strings.Contains(statusPart, "Connected") {
+			status = "connected"
+		} else if strings.Contains(statusPart, "✗") || strings.Contains(statusPart, "Failed") {
+			status = "failed"
+		}
+		
+		// Check if server is in config
+		inConfig := false
+		if cfg != nil {
+			_, inConfig = cfg.MCPServers[serverName]
+		}
+		
+		servers = append(servers, ServerStatus{
+			Name:     serverName,
+			Command:  command,
+			Status:   status,
+			InConfig: inConfig,
+		})
+	}
+	
+	return servers, nil
 }
 
 // buildStartArgs constructs the arguments for starting a server

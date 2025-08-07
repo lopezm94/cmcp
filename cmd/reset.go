@@ -13,8 +13,8 @@ var resetDryRun bool
 
 var resetCmd = &cobra.Command{
 	Use:   "reset",
-	Short: "Stop all running MCP servers",
-	Long:  `Stop all currently running MCP servers.`,
+	Short: "Stop all running MCP servers in Claude for this project",
+	Long:  `Stop all currently running MCP servers in Claude for the current project.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config to get our registered servers
 		cfg, err := config.Load()
@@ -31,11 +31,11 @@ var resetCmd = &cobra.Command{
 		}
 
 		if len(runningServers) == 0 {
-			color.Yellow("No servers from your config are currently running in Claude.")
+			color.Yellow("No servers from your config are currently running in Claude for this project.")
 			return nil
 		}
 
-		color.Cyan("Found %d running server(s) from your config:\n", len(runningServers))
+		color.Cyan("Found %d running server(s) from your config in Claude for this project:\n", len(runningServers))
 		for _, name := range runningServers {
 			fmt.Printf("  - %s\n", name)
 		}
@@ -55,7 +55,7 @@ var resetCmd = &cobra.Command{
 		}
 
 		prompt := promptui.Prompt{
-			Label:     "Are you sure you want to stop all servers",
+			Label:     "Are you sure you want to stop all servers in Claude for this project",
 			IsConfirm: true,
 		}
 

@@ -11,6 +11,8 @@ A command-line tool for managing Model Context Protocol (MCP) servers on your sy
 - **Shell autocompletion** - Full command completion support for bash, zsh, fish, and PowerShell
 - **Standard MCP format** - Compatible with Claude Desktop and other MCP tools
 - **Advanced Troubleshooting** - Built-in diagnostics help identify and fix MCP connection issues
+- **Debug Logging** - Automatic debug output capture for troubleshooting failures
+- **Orphaned Server Cleanup** - Detect and clear servers from Claude that aren't in your config
 
 ## Requirements
 
@@ -83,9 +85,9 @@ This tool stores MCP server configurations and registers them with Claude CLI wh
 ### How it works
 
 1. **cmcp** stores server configurations in its own config file
-2. **cmcp start** uses `claude mcp add` to register servers with Claude
-3. **cmcp stop** uses `claude mcp remove` to unregister servers from Claude  
-4. **cmcp online** uses `claude mcp list` to show Claude's registered servers
+2. **cmcp start** uses `claude mcp add` to register servers with Claude for the current project
+3. **cmcp stop** uses `claude mcp remove` to unregister servers from Claude for the current project
+4. **cmcp online** uses `claude mcp list` to show Claude's registered servers with status indicators
 
 ### Configure and Start MCP Servers
 
@@ -163,37 +165,47 @@ Edit your config file to add servers like these:
 ### Manage Servers
 
 ```bash
-# Start a server (interactive selection, registers with Claude)
+# Start a server (interactive selection, registers with Claude for this project)
 cmcp start
 
-# Start with verbose output to see commands and responses
+# Start with verbose output to see debug output directly
 cmcp start -v
-
-# Start with debug mode for detailed diagnostics when troubleshooting
-cmcp start -d
 
 # Stop a running server (interactive selection, unregisters from Claude)
 cmcp stop
 
-# Show all servers registered in Claude
+# Show all servers registered in Claude for this project with colored status indicators
 cmcp online
 
-# Stop all running servers (unregisters all from Claude)
+# Clear orphaned servers (not in your config) from Claude
+cmcp online --clear
+
+# Remove failed servers from Claude
+cmcp online --clean
+
+# Stop all running servers (unregisters all from Claude for this project)
 cmcp reset
 ```
 
 ### Troubleshooting MCP Connections
 
-cmcp includes advanced diagnostics to help you identify and fix MCP server connection issues:
+cmcp includes advanced diagnostics and automatic debug logging:
+
+#### Automatic Debug Logging
+Debug output is always captured when commands fail:
+- In **normal mode**: Debug logs are saved to `/tmp/cmcp-debug/` and the path is shown in error messages
+- In **verbose mode** (`-v`): Debug output from Claude CLI is shown directly in the terminal
 
 ```bash
-# Use debug mode to get detailed diagnostics when a server fails to start
-cmcp start --debug
-# or
-cmcp start -d
+# Normal mode - debug log saved to file on error
+cmcp start github
+# If it fails: ✗ Failed to start server 'github' (debug log: /tmp/cmcp-debug/cmcp-start-github-20250807-150625.log)
+
+# Verbose mode - see debug output directly
+cmcp start -v github
 ```
 
-The debug mode provides intelligent diagnostics for common issues:
+The diagnostics provide intelligent analysis for common issues:
 
 - **Docker servers**: Checks if Docker daemon is running, image availability, environment variables
 - **Node.js servers**: Verifies node/npx installation, script existence, dependencies
@@ -214,6 +226,42 @@ docker: Cannot connect to the Docker daemon at unix:///var/run/docker.sock.
 Possible solutions:
   1. Docker daemon is not running. Please start Docker Desktop or the Docker service.
   2. Check that required environment variables are set in your shell
+```
+
+#### Managing Orphaned and Failed Servers
+
+**Orphaned servers** (added directly with `claude mcp add` or from tests, not in your cmcp config):
+
+```bash
+# View all servers with status indicators
+cmcp online
+# Output:
+# MCP servers running in Claude for this project:
+# Project: /path/to/your/project
+# 
+# ✓ github: npx -y @modelcontextprotocol/server-github - Connected
+# ✗ test-fail: nonexistent-command --fail - Failed to connect
+# 
+# ⚠ Found 1 server(s) in Claude that are not in your cmcp config:
+#   - test-fail
+# 
+# To clear these servers from Claude, run:
+#   $ cmcp online --clear
+
+# Clear orphaned servers
+cmcp online --clear
+# or with dry-run to preview
+cmcp online --clear --dry-run
+```
+
+**Failed servers** (servers in your config that are failing to connect):
+
+```bash
+# Remove all failed servers from Claude
+cmcp online --clean
+
+# Preview what would be removed
+cmcp online --clean --dry-run
 ```
 
 **Security Note**: All sensitive information (API keys, tokens, passwords) are automatically masked in verbose and debug output to prevent accidental exposure.
@@ -260,6 +308,19 @@ Run comprehensive tests in an isolated container:
 ```bash
 # Run all tests (automatically detects Podman or Docker)
 ./test.sh
+
+# Run specific tests
+./test.sh online              # Test online command features
+./test.sh logging             # Test automatic logging functionality
+./test.sh unit comprehensive  # Run multiple specific tests
+
+# Available test names:
+# - unit: Go unit tests
+# - comprehensive: Comprehensive functionality tests
+# - install: Install/uninstall script tests
+# - logging: Automatic logging tests
+# - web: Web install/uninstall tests
+# - online: Online command tests
 ```
 
 The test suite covers:
@@ -268,6 +329,8 @@ The test suite covers:
 - Server lifecycle management
 - Configuration persistence
 - Error handling
+- Debug logging
+- Orphaned server cleanup
 
 Tests run in a clean environment and don't affect your system.
 

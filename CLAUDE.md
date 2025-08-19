@@ -114,3 +114,22 @@ Uses standard MCP server configuration format:
 - Preserve existing configurations during upgrades
 - Test commands with dry-run flags before making changes
 - Security-sensitive information should always be masked in output
+
+## Testing Safety Guidelines
+
+**CRITICAL: Never run unit tests directly on the local system for packages that access the filesystem**
+
+- **ALWAYS use containerized tests** (`./test.sh`) for any filesystem operations
+- **NEVER run `go test` locally** on config or filesystem packages
+- The config package supports `CMCP_CONFIG_PATH` environment variable for test isolation
+- All filesystem tests MUST run in Docker/Podman containers to prevent data loss
+- Tests that modify configuration should use temporary paths, never the real `~/.cmcp` directory
+
+### Safe Testing Commands
+```bash
+# SAFE - runs in container
+./test.sh config
+
+# UNSAFE - DO NOT RUN
+go test ./internal/config  # This could damage local config!
+```

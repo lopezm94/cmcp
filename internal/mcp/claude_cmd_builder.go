@@ -590,14 +590,22 @@ func (b *ClaudeCmdBuilder) BuildResetCommands(serverNames []string) []string {
 
 // buildStartArgsJSON constructs the arguments for starting a server using add-json
 func (b *ClaudeCmdBuilder) buildStartArgsJSON(name string, server *config.MCPServer) []string {
-	// Create the JSON structure
-	serverJSON := map[string]interface{}{
-		"command": server.Command,
-		"args":    server.Args,
+	// Create the JSON structure starting with any extra fields
+	serverJSON := make(map[string]interface{})
+	for k, v := range server.Extra {
+		serverJSON[k] = v
 	}
 
+	// Add known fields (these will override any duplicates in Extra)
+	serverJSON["command"] = server.Command
+	if len(server.Args) > 0 {
+		serverJSON["args"] = server.Args
+	}
 	if len(server.Env) > 0 {
 		serverJSON["env"] = server.Env
+	}
+	if server.Cwd != "" {
+		serverJSON["cwd"] = server.Cwd
 	}
 
 	// Marshal to JSON
@@ -662,6 +670,7 @@ func (b *ClaudeCmdBuilder) buildPrettyJSONCommand(name string, server *config.MC
 		colored = strings.ReplaceAll(colored, `"command":`, blue(`"command"`)+gray(":"))
 		colored = strings.ReplaceAll(colored, `"args":`, blue(`"args"`)+gray(":"))
 		colored = strings.ReplaceAll(colored, `"env":`, blue(`"env"`)+gray(":"))
+		colored = strings.ReplaceAll(colored, `"cwd":`, blue(`"cwd"`)+gray(":"))
 
 		// Color environment variable keys
 		for key := range server.Env {
@@ -698,14 +707,22 @@ func (b *ClaudeCmdBuilder) PrintPrettyJSONPublic(server *config.MCPServer) {
 
 // printPrettyJSON prints the colored JSON configuration to stdout
 func (b *ClaudeCmdBuilder) printPrettyJSON(server *config.MCPServer) {
-	// Create the JSON structure
-	serverJSON := map[string]interface{}{
-		"command": server.Command,
-		"args":    server.Args,
+	// Create the JSON structure starting with any extra fields
+	serverJSON := make(map[string]interface{})
+	for k, v := range server.Extra {
+		serverJSON[k] = v
 	}
 
+	// Add known fields
+	serverJSON["command"] = server.Command
+	if len(server.Args) > 0 {
+		serverJSON["args"] = server.Args
+	}
 	if len(server.Env) > 0 {
 		serverJSON["env"] = server.Env
+	}
+	if server.Cwd != "" {
+		serverJSON["cwd"] = server.Cwd
 	}
 
 	// Marshal to JSON for pretty printing
@@ -727,6 +744,7 @@ func (b *ClaudeCmdBuilder) printPrettyJSON(server *config.MCPServer) {
 		colored = strings.ReplaceAll(colored, `"command":`, blue(`"command"`)+gray(":"))
 		colored = strings.ReplaceAll(colored, `"args":`, blue(`"args"`)+gray(":"))
 		colored = strings.ReplaceAll(colored, `"env":`, blue(`"env"`)+gray(":"))
+		colored = strings.ReplaceAll(colored, `"cwd":`, blue(`"cwd"`)+gray(":"))
 
 		// Color environment variable keys
 		for key := range server.Env {

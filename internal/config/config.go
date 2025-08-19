@@ -8,9 +8,11 @@ import (
 )
 
 type MCPServer struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
+	Command string                 `json:"command"`
+	Args    []string               `json:"args,omitempty"`
+	Env     map[string]string      `json:"env,omitempty"`
+	Cwd     string                 `json:"cwd,omitempty"`
+	Extra   map[string]interface{} `json:"-"` // Stores any additional fields
 }
 
 type Config struct {
@@ -20,15 +22,90 @@ type Config struct {
 var configPath string
 
 func init() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		panic(fmt.Sprintf("failed to get user home directory: %v", err))
+	// Allow override via environment variable for testing
+	if envPath := os.Getenv("CMCP_CONFIG_PATH"); envPath != "" {
+		configPath = envPath
+	} else {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			panic(fmt.Sprintf("failed to get user home directory: %v", err))
+		}
+		configPath = filepath.Join(homeDir, ".cmcp", "config.json")
 	}
-	configPath = filepath.Join(homeDir, ".cmcp", "config.json")
 }
 
 func GetConfigPath() (string, error) {
 	return configPath, nil
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling to preserve unknown fields
+func (s *MCPServer) UnmarshalJSON(data []byte) error {
+	// First unmarshal into a map to capture all fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Extract known fields
+	if cmd, ok := raw["command"].(string); ok {
+		s.Command = cmd
+		delete(raw, "command")
+	}
+
+	if args, ok := raw["args"].([]interface{}); ok {
+		s.Args = make([]string, len(args))
+		for i, arg := range args {
+			if str, ok := arg.(string); ok {
+				s.Args[i] = str
+			}
+		}
+		delete(raw, "args")
+	}
+
+	if env, ok := raw["env"].(map[string]interface{}); ok {
+		s.Env = make(map[string]string)
+		for k, v := range env {
+			if str, ok := v.(string); ok {
+				s.Env[k] = str
+			}
+		}
+		delete(raw, "env")
+	}
+
+	if cwd, ok := raw["cwd"].(string); ok {
+		s.Cwd = cwd
+		delete(raw, "cwd")
+	}
+
+	// Store any remaining fields in Extra
+	if len(raw) > 0 {
+		s.Extra = raw
+	}
+
+	return nil
+}
+
+// MarshalJSON implements custom JSON marshaling to include extra fields
+func (s MCPServer) MarshalJSON() ([]byte, error) {
+	// Start with extra fields if any
+	result := make(map[string]interface{})
+	for k, v := range s.Extra {
+		result[k] = v
+	}
+
+	// Add known fields (these will override any duplicates in Extra)
+	result["command"] = s.Command
+	if len(s.Args) > 0 {
+		result["args"] = s.Args
+	}
+	if len(s.Env) > 0 {
+		result["env"] = s.Env
+	}
+	if s.Cwd != "" {
+		result["cwd"] = s.Cwd
+	}
+
+	return json.Marshal(result)
 }
 
 func Load() (*Config, error) {
@@ -39,8 +116,9 @@ func Load() (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Return empty config without saving - let caller decide what to do
 			cfg := &Config{MCPServers: make(map[string]MCPServer)}
-			return cfg, Save(cfg)
+			return cfg, nil
 		}
 		return nil, err
 	}

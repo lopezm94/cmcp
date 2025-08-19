@@ -191,9 +191,16 @@ var configOpenCmd = &cobra.Command{
 		}
 
 		// Ensure config file exists by loading it
-		_, err = config.Load()
+		cfg, err := config.Load()
 		if err != nil {
-			return fmt.Errorf("failed to load/create config: %w", err)
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		
+		// If config doesn't exist yet, create it
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			if err := config.Save(cfg); err != nil {
+				return fmt.Errorf("failed to create config: %w", err)
+			}
 		}
 
 		color.Cyan("Opening config file...\n")
@@ -202,7 +209,7 @@ var configOpenCmd = &cobra.Command{
 		}
 
 		// After editing, reload and reformat the JSON file
-		cfg, err := config.Load()
+		cfg, err = config.Load()
 		if err != nil {
 			return fmt.Errorf("failed to reload config after editing: %w", err)
 		}

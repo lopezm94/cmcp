@@ -5,6 +5,21 @@
 
 set -e
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="/tmp/cmcp-test-${TEST_NAME}/config.json"
+export TEST_DIR="/tmp/cmcp-test-${TEST_NAME}"
+
+# Setup test environment
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Cleanup on exit
+cleanup() {
+    rm -rf "$TEST_DIR"
+}
+trap cleanup EXIT
+
 echo "=== Testing cmcp automatic debug logging with various failure scenarios ==="
 
 # Ensure cmcp is accessible
@@ -26,7 +41,7 @@ fi
 
 # Create test config with servers that fail at different stages
 mkdir -p ~/.cmcp
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "nonexistent-command": {
@@ -294,7 +309,7 @@ EOF
 chmod +x /tmp/delayed-fail.sh
 
 # Add to config
-cat >> ~/.cmcp/config.json << 'EOF'
+cat >> "$CMCP_CONFIG_PATH" << 'EOF'
     ,
     "delayed-failure": {
       "command": "/tmp/delayed-fail.sh",
@@ -303,9 +318,9 @@ cat >> ~/.cmcp/config.json << 'EOF'
 EOF
 
 # Fix JSON (remove last comma and close properly)
-sed -i '$ s/,$//' ~/.cmcp/config.json
-echo '  }' >> ~/.cmcp/config.json
-echo '}' >> ~/.cmcp/config.json
+sed -i '$ s/,$//' "$CMCP_CONFIG_PATH"
+echo '  }' >> "$CMCP_CONFIG_PATH"
+echo '}' >> "$CMCP_CONFIG_PATH"
 
 echo "Testing delayed failure..."
 OUTPUT=$($CMCP_BIN start delayed-failure 2>&1 || true)

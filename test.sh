@@ -123,7 +123,7 @@ if command -v podman >/dev/null 2>&1; then
     fi
 
     if [ $RUN_CONFIG -eq 1 ]; then
-        TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Config Preservation Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-config.sh /tmp/test-config.sh && chmod +x /tmp/test-config.sh && cd /tmp && CMCP_CONFIG_PATH=/tmp/test-config.json CMCP_BIN=/tmp/cmcp ./test-config.sh || true"
+        TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Config Preservation Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-config.sh /tmp/test-config.sh && chmod +x /tmp/test-config.sh && cd /tmp && CMCP_BIN=/tmp/cmcp ./test-config.sh || true"
     fi
 
     if [ $RUN_NON_INTERACTIVE -eq 1 ]; then
@@ -187,7 +187,7 @@ elif command -v docker >/dev/null 2>&1; then
     fi
 
     if [ $RUN_CONFIG -eq 1 ]; then
-        TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Config Preservation Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-config.sh /tmp/test-config.sh && chmod +x /tmp/test-config.sh && cd /tmp && CMCP_CONFIG_PATH=/tmp/test-config.json CMCP_BIN=/tmp/cmcp ./test-config.sh || true"
+        TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Config Preservation Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-config.sh /tmp/test-config.sh && chmod +x /tmp/test-config.sh && cd /tmp && CMCP_BIN=/tmp/cmcp ./test-config.sh || true"
     fi
 
     if [ $RUN_NON_INTERACTIVE -eq 1 ]; then

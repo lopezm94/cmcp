@@ -3,6 +3,21 @@
 # CMCP Non-Interactive Mode Tests
 # Tests commands with arguments instead of interactive prompts
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="/tmp/cmcp-test-${TEST_NAME}/config.json"
+export TEST_DIR="/tmp/cmcp-test-${TEST_NAME}"
+
+# Setup test environment  
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Ensure config directory exists for all operations
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Use the provided binary or default
+CMCP="${CMCP_BIN:-./cmcp}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,25 +48,18 @@ test_fail() {
 
 # Clean up function
 cleanup() {
-    rm -rf ~/.cmcp/config.json.bak 2>/dev/null || true
+    rm -rf "$TEST_DIR" 2>/dev/null || true
 }
 
-# Set up clean environment
-cleanup
+# Set up trap for cleanup on exit
 trap cleanup EXIT
-
-# Backup existing config if it exists
-if [[ -f ~/.cmcp/config.json ]]; then
-    cp ~/.cmcp/config.json ~/.cmcp/config.json.bak
-fi
 
 echo "=== CMCP Non-Interactive Mode Tests ==="
 echo
 
 # Setup: Create test configuration
 test_start "Setup test configuration"
-mkdir -p ~/.cmcp
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "test-server1": {
@@ -70,7 +78,7 @@ cat > ~/.cmcp/config.json << 'EOF'
 }
 EOF
 
-if [[ -f ~/.cmcp/config.json ]]; then
+if [[ -f "$CMCP_CONFIG_PATH" ]]; then
     test_pass "Test configuration created"
 else
     test_fail "Setup" "Failed to create test configuration"
@@ -79,10 +87,10 @@ fi
 
 # Test 1: config rm with single server (non-interactive)
 test_start "config rm - single server non-interactive"
-OUTPUT=$(./cmcp config rm test-server1 <<< "y" 2>&1)
+OUTPUT=$("$CMCP" config rm test-server1 <<< "y" 2>&1)
 if echo "$OUTPUT" | grep -q "Successfully removed"; then
     # Verify server was actually removed
-    if jq -e '.mcpServers."test-server1"' ~/.cmcp/config.json >/dev/null 2>&1; then
+    if jq -e '.mcpServers."test-server1"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
         test_fail "config rm single" "Server still exists in config"
     else
         test_pass "Single server removed non-interactively"
@@ -93,11 +101,11 @@ fi
 
 # Test 2: config rm with multiple servers (non-interactive)
 test_start "config rm - multiple servers non-interactive"
-OUTPUT=$(./cmcp config rm test-server2 test-server3 <<< "y" 2>&1)
+OUTPUT=$("$CMCP" config rm test-server2 test-server3 <<< "y" 2>&1)
 if echo "$OUTPUT" | grep -q "Successfully removed 2 server"; then
     # Verify servers were removed
-    if jq -e '.mcpServers."test-server2"' ~/.cmcp/config.json >/dev/null 2>&1 || \
-       jq -e '.mcpServers."test-server3"' ~/.cmcp/config.json >/dev/null 2>&1; then
+    if jq -e '.mcpServers."test-server2"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 || \
+       jq -e '.mcpServers."test-server3"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
         test_fail "config rm multiple" "Some servers still exist in config"
     else
         test_pass "Multiple servers removed non-interactively"
@@ -110,7 +118,7 @@ fi
 # Test 3: config rm with non-existent server
 test_start "config rm - non-existent server"
 # Recreate config for this test
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "real-server": {
@@ -121,7 +129,7 @@ cat > ~/.cmcp/config.json << 'EOF'
 }
 EOF
 
-OUTPUT=$(./cmcp config rm non-existent 2>&1)
+OUTPUT=$("$CMCP" config rm non-existent 2>&1)
 if echo "$OUTPUT" | grep -q "not found in configuration"; then
     test_pass "Properly handles non-existent server"
 else
@@ -132,7 +140,7 @@ fi
 # Test 4: start command non-interactive mode
 test_start "start - non-interactive with server names"
 # Note: We can't actually test starting servers without Claude, but we can test the command accepts arguments
-OUTPUT=$(./cmcp start real-server --dry-run 2>&1)
+OUTPUT=$("$CMCP" start real-server --dry-run 2>&1)
 if echo "$OUTPUT" | grep -q "Would execute" || echo "$OUTPUT" | grep -q "not found"; then
     test_pass "Start command accepts server names as arguments"
 else
@@ -142,7 +150,7 @@ fi
 
 # Test 5: stop command non-interactive mode
 test_start "stop - non-interactive with server names"
-OUTPUT=$(./cmcp stop real-server --dry-run 2>&1)
+OUTPUT=$("$CMCP" stop real-server --dry-run 2>&1)
 if echo "$OUTPUT" | grep -q "Would execute" || echo "$OUTPUT" | grep -q "not running"; then
     test_pass "Stop command accepts server names as arguments"
 else
@@ -153,7 +161,7 @@ fi
 # Test 6: Multiple operations in sequence
 test_start "Sequential non-interactive operations"
 # Create fresh config
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "seq-test1": {
@@ -175,7 +183,7 @@ EOF
 # Remove servers in sequence
 SUCCESS=true
 for server in seq-test1 seq-test2 seq-test3; do
-    if ! ./cmcp config rm "$server" <<< "y" >/dev/null 2>&1; then
+    if ! "$CMCP" config rm "$server" <<< "y" >/dev/null 2>&1; then
         SUCCESS=false
         break
     fi
@@ -183,7 +191,7 @@ done
 
 if [[ "$SUCCESS" == "true" ]]; then
     # Check all servers are gone
-    SERVER_COUNT=$(jq -r '.mcpServers | length' ~/.cmcp/config.json 2>/dev/null || echo "0")
+    SERVER_COUNT=$(jq -r '.mcpServers | length' "$CMCP_CONFIG_PATH" 2>/dev/null || echo "0")
     if [[ "$SERVER_COUNT" == "0" ]]; then
         test_pass "Sequential operations work correctly"
     else
@@ -194,10 +202,10 @@ else
 fi
 
 # Restore original config if it existed
-if [[ -f ~/.cmcp/config.json.bak ]]; then
-    mv ~/.cmcp/config.json.bak ~/.cmcp/config.json
+if [[ -f "$CMCP_CONFIG_PATH".bak ]]; then
+    mv "$CMCP_CONFIG_PATH".bak "$CMCP_CONFIG_PATH"
 else
-    rm -f ~/.cmcp/config.json
+    rm -f "$CMCP_CONFIG_PATH"
 fi
 
 # Print summary

@@ -4,6 +4,21 @@
 
 set +e
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="/tmp/cmcp-test-${TEST_NAME}/config.json"
+export TEST_DIR="/tmp/cmcp-test-${TEST_NAME}"
+
+# Setup test environment
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Cleanup on exit
+cleanup() {
+    rm -rf "$TEST_DIR"
+}
+trap cleanup EXIT
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -114,7 +129,7 @@ test_start "Web install with existing config"
 (
     # Create config
     mkdir -p ~/.cmcp
-    cat > ~/.cmcp/config.json << 'JSON'
+    cat > "$CMCP_CONFIG_PATH" << 'JSON'
 {
   "mcpServers": {
     "test1": {"command": "test", "args": ["arg1"]},
@@ -128,7 +143,7 @@ JSON
     
     if [[ "$OUTPUT" == *"Configuration preserved: 2 server(s) available"* ]]; then
         # Verify config still exists
-        if [[ -f ~/.cmcp/config.json ]] && grep -q "test1" ~/.cmcp/config.json; then
+        if [[ -f "$CMCP_CONFIG_PATH" ]] && grep -q "test1" "$CMCP_CONFIG_PATH"; then
             test_pass "Web install preserved existing config"
         else
             test_fail "Config preservation" "Config file was modified"
@@ -148,14 +163,14 @@ test_start "Web uninstall - keep config"
     
     # Create config
     mkdir -p ~/.cmcp
-    echo '{"mcpServers":{}}' > ~/.cmcp/config.json
+    echo '{"mcpServers":{}}' > "$CMCP_CONFIG_PATH"
     
     # Uninstall (pipe "n" to keep config)
     OUTPUT=$(echo "n" | bash /app/scripts/web-uninstall.sh 2>&1)
     
     if [[ "$OUTPUT" == *"Keeping configuration registry"* ]] && 
        [[ "$OUTPUT" == *"uninstalled successfully"* ]] && 
-       [[ -f ~/.cmcp/config.json ]]; then
+       [[ -f "$CMCP_CONFIG_PATH" ]]; then
         test_pass "Web uninstall kept config when requested"
     else
         test_fail "Uninstall keep config" "Config removed or wrong output: $OUTPUT"
@@ -172,7 +187,7 @@ test_start "Web uninstall - remove config"
     
     # Create config
     mkdir -p ~/.cmcp
-    echo '{"mcpServers":{}}' > ~/.cmcp/config.json
+    echo '{"mcpServers":{}}' > "$CMCP_CONFIG_PATH"
     
     # Uninstall (pipe "y" to remove config)
     OUTPUT=$(echo "y" | bash /app/scripts/web-uninstall.sh 2>&1)

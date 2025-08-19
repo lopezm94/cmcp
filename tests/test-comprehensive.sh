@@ -3,6 +3,24 @@
 
 set -e
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="/tmp/cmcp-test-${TEST_NAME}/config.json"
+export TEST_DIR="/tmp/cmcp-test-${TEST_NAME}"
+
+# Setup test environment
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Cleanup on exit
+cleanup() {
+    rm -rf "$TEST_DIR"
+}
+trap cleanup EXIT
+
+# Use the provided binary or default
+CMCP="${CMCP_BIN:-./cmcp}"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -51,7 +69,7 @@ verify_json_structure() {
 # Clean up function
 cleanup() {
     echo "Cleaning up..."
-    ./cmcp reset <<< "y" 2>/dev/null || true
+    "$CMCP" reset <<< "y" 2>/dev/null || true
     rm -rf ~/.cmcp/
     # No manual process cleanup needed - Claude CLI manages servers
 }
@@ -66,7 +84,7 @@ echo ""
 
 # Test 1: Basic command execution
 test_start "Basic command help"
-if ./cmcp --help >/dev/null 2>&1; then
+if "$CMCP" --help >/dev/null 2>&1; then
     test_pass "Help command works"
 else
     test_fail "Help command" "Command failed to execute"
@@ -74,7 +92,7 @@ fi
 
 # Test 2: Config subcommands
 test_start "Config subcommands available"
-OUTPUT=$(./cmcp config --help 2>&1)
+OUTPUT=$("$CMCP" config --help 2>&1)
 if [[ "$OUTPUT" == *"open"* ]] && [[ "$OUTPUT" == *"list"* ]] && [[ "$OUTPUT" == *"rm"* ]]; then
     test_pass "All config subcommands available (list, rm, open)"
 else
@@ -83,7 +101,7 @@ fi
 
 # Test 3: Empty config list
 test_start "Config list (empty state)"
-OUTPUT=$(./cmcp config list 2>&1)
+OUTPUT=$("$CMCP" config list 2>&1)
 if [[ "$OUTPUT" == *"No servers configured"* ]]; then
     test_pass "Empty config list shows correct message"
 else
@@ -93,7 +111,7 @@ fi
 # Test 4: Add first server via config file editing
 test_start "Add first MCP server (playwright) via config"
 mkdir -p ~/.cmcp
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
@@ -104,7 +122,7 @@ cat > ~/.cmcp/config.json << 'EOF'
 }
 EOF
 
-if [[ -f ~/.cmcp/config.json ]]; then
+if [[ -f "$CMCP_CONFIG_PATH" ]]; then
     test_pass "First server added via config file"
 else
     test_fail "First server addition" "Failed to create config with playwright server"
@@ -112,22 +130,22 @@ fi
 
 # Test 5: Verify JSON structure
 test_start "JSON structure verification"
-verify_json_structure ~/.cmcp/config.json "Config file structure"
+verify_json_structure "$CMCP_CONFIG_PATH" "Config file structure"
 
 # Test 6: Check JSON content for standard MCP format
 test_start "Standard MCP format verification"
-if jq -e '.mcpServers.playwright.command == "npx"' ~/.cmcp/config.json >/dev/null 2>&1 && \
-   jq -e '.mcpServers.playwright.args[0] == "@playwright/mcp@latest"' ~/.cmcp/config.json >/dev/null 2>&1; then
+if jq -e '.mcpServers.playwright.command == "npx"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
+   jq -e '.mcpServers.playwright.args[0] == "@playwright/mcp@latest"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Standard MCP format with command/args separation"
 else
     test_fail "MCP format" "Command/args not properly separated"
     echo "  Actual config:"
-    cat ~/.cmcp/config.json | jq .mcpServers.playwright
+    cat "$CMCP_CONFIG_PATH" | jq .mcpServers.playwright
 fi
 
 # Test 7: Add second server via config file
 test_start "Add second MCP server (github) via config"
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
@@ -142,7 +160,7 @@ cat > ~/.cmcp/config.json << 'EOF'
 }
 EOF
 
-if jq -e '.mcpServers.github' ~/.cmcp/config.json >/dev/null 2>&1; then
+if jq -e '.mcpServers.github' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Second server added to config file"
 else
     test_fail "Second server addition" "Failed to add github server to config"
@@ -150,7 +168,7 @@ fi
 
 # Test 8: Config list with servers
 test_start "Config list (with servers)"
-OUTPUT=$(./cmcp config list 2>&1)
+OUTPUT=$("$CMCP" config list 2>&1)
 if [[ "$OUTPUT" == *"playwright"* ]] && [[ "$OUTPUT" == *"github"* ]]; then
     test_pass "Config list shows both servers"
 else
@@ -159,7 +177,7 @@ fi
 
 # Test 9: Add environment variables via config file
 test_start "Add environment variables to github server via config"
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
@@ -179,7 +197,7 @@ cat > ~/.cmcp/config.json << 'EOF'
 EOF
 
 # Verify environment variables were added
-if jq -e '.mcpServers.github.env.GITHUB_TOKEN == "test_token"' ~/.cmcp/config.json >/dev/null 2>&1; then
+if jq -e '.mcpServers.github.env.GITHUB_TOKEN == "test_token"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Environment variables added successfully via config"
 else
     test_fail "Environment variables" "Variables not found in config"
@@ -187,7 +205,7 @@ fi
 
 # Test 10: Add filesystem server for testing via config
 test_start "Add filesystem server for start/stop testing via config"
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
@@ -210,7 +228,7 @@ cat > ~/.cmcp/config.json << 'EOF'
 }
 EOF
 
-if jq -e '.mcpServers."filesystem"' ~/.cmcp/config.json >/dev/null 2>&1; then
+if jq -e '.mcpServers."filesystem"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Filesystem server added to config successfully"
 else
     test_fail "Filesystem server addition" "Failed to add filesystem server to config"
@@ -218,7 +236,7 @@ fi
 
 # Test 11: Online command (no servers running)
 test_start "Online command (no servers)"
-OUTPUT=$(./cmcp online 2>&1)
+OUTPUT=$("$CMCP" online 2>&1)
 if [[ "$OUTPUT" == *"No servers are currently running"* ]] || [[ "$OUTPUT" == *"No MCP servers configured"* ]] || [[ "$OUTPUT" == *"Use \`cmcp start\` to start a server"* ]]; then
     test_pass "Online command shows no running servers"
 else
@@ -229,7 +247,7 @@ fi
 test_start "Start filesystem server"
 if timeout 10 expect -c '
     set timeout 5
-    spawn ./cmcp start
+    spawn "$CMCP" start
     expect "Select server to start"
     send "\033\[B\033\[B\r"
     expect "Successfully started server"
@@ -241,7 +259,7 @@ fi
 
 # Test 13: Online command (with running server)
 test_start "Online command (with running servers)"
-OUTPUT=$(./cmcp online 2>&1)
+OUTPUT=$("$CMCP" online 2>&1)
 # The claude mcp list command should show the registered server or indicate no servers
 if [[ "$OUTPUT" == *"filesystem"* ]] || [[ "$OUTPUT" == *"No servers are currently running"* ]] || [[ "$OUTPUT" == *"No MCP servers configured"* ]]; then
     test_pass "Online command works"
@@ -253,7 +271,7 @@ fi
 test_start "Stop server"
 if timeout 10 expect -c '
     set timeout 5
-    spawn ./cmcp stop
+    spawn "$CMCP" stop
     expect {
         "Select server to stop" {
             send "\r"
@@ -275,7 +293,7 @@ fi
 # Test 15: Reset command
 test_start "Reset command"
 # Reset without confirmation needed
-OUTPUT=$(echo "y" | ./cmcp reset 2>&1)
+OUTPUT=$(echo "y" | "$CMCP" reset 2>&1)
 if [[ "$OUTPUT" == *"Successfully stopped all servers"* ]] || [[ "$OUTPUT" == *"No servers are currently running"* ]] || [[ "$OUTPUT" == *"No servers from your config are currently running in Claude"* ]]; then
     test_pass "Reset command works"
 else
@@ -286,7 +304,7 @@ fi
 test_start "Open command (basic functionality)"
 # Test with no servers (after cleanup)
 rm -rf ~/.config/cmcp/
-OUTPUT=$(timeout 2s bash -c 'echo "" | ./cmcp config open' 2>&1 || echo "timeout")
+OUTPUT=$(timeout 2s bash -c 'echo "" | "$CMCP" config open' 2>&1 || echo "timeout")
 if [[ "$OUTPUT" == *"Opening config file"* ]] || [[ "$OUTPUT" == *"timeout"* ]] || [[ "$OUTPUT" == *"No servers configured"* ]]; then
     test_pass "Open command basic functionality works"
 else
@@ -296,17 +314,17 @@ fi
 # Test 17: JSON formatting after config open
 test_start "JSON formatting after config open"
 # Create a poorly formatted config file
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {"mcpServers":{"test-server":{"command":"test","args":["arg1","arg2"]},"another-server":{"command":"another","env":{"KEY":"value"}}}}
 EOF
 
 # Run config open with non-interactive editor
-OUTPUT=$(EDITOR=true ./cmcp config open 2>&1)
+OUTPUT=$(EDITOR=true "$CMCP" config open 2>&1)
 if [[ "$OUTPUT" == *"Config file reformatted successfully"* ]]; then
     # Check if JSON is properly formatted
-    if cat ~/.cmcp/config.json | jq . >/dev/null 2>&1; then
+    if cat "$CMCP_CONFIG_PATH" | jq . >/dev/null 2>&1; then
         # Check indentation by looking for spaces
-        if grep -q "^  " ~/.cmcp/config.json; then
+        if grep -q "^  " "$CMCP_CONFIG_PATH"; then
             test_pass "Config file properly formatted after editing"
         else
             test_fail "JSON formatting" "File is valid JSON but not indented"
@@ -321,7 +339,7 @@ fi
 # Test 18: Complex configuration test
 test_start "Complex configuration with all features"
 # Create complex config directly
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "complex-server": {
@@ -337,22 +355,22 @@ cat > ~/.cmcp/config.json << 'EOF'
 EOF
 
 # Verify complex config structure
-if jq -e '.mcpServers."complex-server".command == "npx"' ~/.cmcp/config.json >/dev/null 2>&1 && \
-   jq -e '.mcpServers."complex-server".args[0] == "@claude/mcp-server-filesystem"' ~/.cmcp/config.json >/dev/null 2>&1 && \
-   jq -e '.mcpServers."complex-server".args[1] == "--path"' ~/.cmcp/config.json >/dev/null 2>&1 && \
-   jq -e '.mcpServers."complex-server".env.FILE_PATH == "/tmp"' ~/.cmcp/config.json >/dev/null 2>&1; then
+if jq -e '.mcpServers."complex-server".command == "npx"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
+   jq -e '.mcpServers."complex-server".args[0] == "@claude/mcp-server-filesystem"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
+   jq -e '.mcpServers."complex-server".args[1] == "--path"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
+   jq -e '.mcpServers."complex-server".env.FILE_PATH == "/tmp"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Complex configuration with args and env vars"
 else
     test_fail "Complex configuration" "Config structure incorrect"
     echo "  Actual config:"
-    cat ~/.cmcp/config.json | jq '.mcpServers."complex-server"'
+    cat "$CMCP_CONFIG_PATH" | jq '.mcpServers."complex-server"'
 fi
 
 # Test 19: Remove server
 test_start "Remove server from config"
 if timeout 10 expect -c '
     set timeout 5
-    spawn ./cmcp config rm
+    spawn "$CMCP" config rm
     expect "Select server to remove"
     send "\r"
     expect "Are you sure"
@@ -366,7 +384,7 @@ fi
 
 # Test 20: Shell completion generation
 test_start "Shell completion generation"
-if ./cmcp completion bash >/dev/null 2>&1 && ./cmcp completion zsh >/dev/null 2>&1; then
+if "$CMCP" completion bash >/dev/null 2>&1 && "$CMCP" completion zsh >/dev/null 2>&1; then
     test_pass "Shell completion generation works"
 else
     test_fail "Completion generation" "Failed to generate completions"
@@ -374,9 +392,9 @@ fi
 
 # Test 21: Final configuration file verification
 test_start "Final configuration file structure"
-if verify_json_structure ~/.cmcp/config.json "Final config"; then
+if verify_json_structure "$CMCP_CONFIG_PATH" "Final config"; then
     echo "  Final config structure:"
-    cat ~/.cmcp/config.json | jq .
+    cat "$CMCP_CONFIG_PATH" | jq .
     test_pass "Configuration maintains standard MCP format throughout"
 else
     test_fail "Final config verification" "Config file corrupted or invalid"

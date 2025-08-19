@@ -5,6 +5,21 @@
 
 set -e
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="/tmp/cmcp-test-${TEST_NAME}/config.json"
+export TEST_DIR="/tmp/cmcp-test-${TEST_NAME}"
+
+# Setup test environment
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Cleanup on exit
+cleanup() {
+    rm -rf "$TEST_DIR"
+}
+trap cleanup EXIT
+
 echo "=== Testing cmcp online command ==="
 
 # Ensure cmcp is accessible
@@ -37,7 +52,7 @@ echo "1. Testing empty state..."
 echo "=========================="
 
 # Start with empty config
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {}
 }
@@ -55,7 +70,7 @@ echo "2. Setting up test servers..."
 echo "=============================="
 
 # Add some servers to config
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "test-server": {
@@ -188,7 +203,7 @@ echo "7. Testing status indicators..."
 echo "================================="
 
 # Add a server that will fail to connect
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "fail-server": {
@@ -221,7 +236,7 @@ echo "8. Testing --clean flag (remove failed servers)..."
 echo "===================================================="
 
 # Add servers to config, including one that will fail
-cat > ~/.cmcp/config.json << 'EOF'
+cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "good-server": {

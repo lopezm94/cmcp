@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cmcp/internal/config"
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
@@ -20,8 +21,10 @@ var configCmd = &cobra.Command{
 }
 
 var configRmCmd = &cobra.Command{
-	Use:   "rm",
-	Short: "Remove an MCP server from configuration",
+	Use:   "rm [server-name...]",
+	Short: "Remove MCP servers from configuration",
+	Long:  `Remove one or more MCP servers from configuration.
+You can specify server names as arguments or run without arguments for interactive selection.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -37,50 +40,88 @@ var configRmCmd = &cobra.Command{
 		}
 
 		// Color functions
-		cyan := color.New(color.FgCyan).SprintFunc()
-		green := color.New(color.FgGreen).SprintFunc()
-		red := color.New(color.FgRed).SprintFunc()
-		gray := color.New(color.FgHiBlack).SprintFunc()
+		cyan := color.New(color.FgCyan)
+		green := color.New(color.FgGreen)
+		red := color.New(color.FgRed)
+		gray := color.New(color.FgHiBlack)
+		yellow := color.New(color.FgYellow)
 
-		// Get server names and check which are running
-		serverNames := cfg.GetServerNames()
+		var selectedServers []string
 		runningServers := make(map[string]bool)
-		for _, name := range serverNames {
+
+		// Check which servers are running
+		for name := range cfg.MCPServers {
 			if builder.IsRunning(name) {
 				runningServers[name] = true
 			}
 		}
 
-		// Create colored items for the select prompt
-		items := make([]string, len(serverNames))
-		for i, name := range serverNames {
-			if runningServers[name] {
-				items[i] = fmt.Sprintf("%s %s %s", green("●"), name, gray("(running)"))
-			} else {
-				items[i] = fmt.Sprintf("%s %s", gray("○"), name)
+		// If server names are provided as arguments, use those (non-interactive mode)
+		if len(args) > 0 {
+			for _, serverName := range args {
+				// Check if server exists in config
+				if _, exists := cfg.MCPServers[serverName]; !exists {
+					return fmt.Errorf("server '%s' not found in configuration", serverName)
+				}
+				selectedServers = append(selectedServers, serverName)
+			}
+		} else {
+			// Interactive mode - multi-select
+			serverNames := cfg.GetServerNames()
+			
+			if len(serverNames) == 0 {
+				yellow.Println("No servers to remove.")
+				return nil
+			}
+
+			// Create labeled options showing running status
+			var options []string
+			for _, name := range serverNames {
+				if runningServers[name] {
+					options = append(options, fmt.Sprintf("%s (running)", name))
+				} else {
+					options = append(options, name)
+				}
+			}
+
+			prompt := &survey.MultiSelect{
+				Message: "Select servers to remove (use space to select, enter to confirm):",
+				Options: options,
+			}
+
+			var selectedOptions []string
+			err = survey.AskOne(prompt, &selectedOptions, survey.WithPageSize(10))
+			if err != nil {
+				return err
+			}
+
+			// Extract server names from selected options (remove " (running)" suffix)
+			for _, option := range selectedOptions {
+				serverName := strings.TrimSuffix(option, " (running)")
+				selectedServers = append(selectedServers, serverName)
 			}
 		}
 
-		prompt := promptui.Select{
-			Label: cyan("Select server to remove"),
-			Items: items,
+		if len(selectedServers) == 0 {
+			yellow.Println("No servers selected.")
+			return nil
 		}
 
-		idx, _, err := prompt.Run()
-		if err != nil {
-			return err
+		// Show what will be removed
+		fmt.Println()
+		cyan.Println("The following servers will be removed:")
+		for _, name := range selectedServers {
+			if runningServers[name] {
+				fmt.Printf("  • %s %s\n", name, gray.Sprint("(will be stopped)"))
+			} else {
+				fmt.Printf("  • %s\n", name)
+			}
 		}
+		fmt.Println()
 
-		serverName := serverNames[idx]
-
-		// Show warning if server is running
-		if runningServers[serverName] {
-			fmt.Printf("\n%s %s\n", red("⚠"), red("Warning: This server is currently running"))
-			fmt.Printf("%s\n\n", gray("It will be stopped if you proceed"))
-		}
-
+		// Confirm removal
 		confirmPrompt := promptui.Prompt{
-			Label:     fmt.Sprintf("Are you sure you want to remove %s", cyan(serverName)),
+			Label:     fmt.Sprintf("Are you sure you want to remove %d server(s)", len(selectedServers)),
 			IsConfirm: true,
 		}
 
@@ -89,17 +130,41 @@ var configRmCmd = &cobra.Command{
 			return nil
 		}
 
-		// Stop server if running
-		if runningServers[serverName] {
-			fmt.Printf("%s %s\n", gray("→"), gray("Stopping server..."))
-			builder.StopServer(serverName, false)
+		// Remove each selected server
+		var removed []string
+		var errors []error
+
+		for _, serverName := range selectedServers {
+			// Stop server if running
+			if runningServers[serverName] {
+				cyan.Printf("Stopping server '%s'...\n", serverName)
+				if err := builder.StopServer(serverName, false); err != nil {
+					red.Printf("Warning: Failed to stop server '%s': %v\n", serverName, err)
+					// Continue with removal anyway
+				}
+			}
+
+			if err := cfg.RemoveServer(serverName); err != nil {
+				errors = append(errors, fmt.Errorf("%s: %v", serverName, err))
+			} else {
+				removed = append(removed, serverName)
+			}
 		}
 
-		if err := cfg.RemoveServer(serverName); err != nil {
-			return err
+		// Show results
+		fmt.Println()
+		if len(removed) > 0 {
+			green.Printf("✓ Successfully removed %d server(s): %v\n", len(removed), removed)
 		}
 
-		fmt.Printf("\n%s %s\n", green("✓"), green(fmt.Sprintf("Successfully removed server '%s'", serverName)))
+		if len(errors) > 0 {
+			red.Printf("✗ Failed to remove %d server(s):\n", len(errors))
+			for _, err := range errors {
+				red.Printf("  • %v\n", err)
+			}
+			return fmt.Errorf("some servers could not be removed")
+		}
+
 		return nil
 	},
 }

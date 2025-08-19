@@ -7,7 +7,7 @@
 #   ./test.sh logging install    # Run logging and install tests
 #   ./test.sh unit comprehensive # Run unit and comprehensive tests
 
-# Available tests: unit, comprehensive, install, logging, web, online, config
+# Available tests: unit, comprehensive, install, logging, web, online, config, non-interactive
 
 echo "=== CMCP Test Runner ==="
 
@@ -19,6 +19,7 @@ RUN_LOGGING=0
 RUN_WEB=0
 RUN_ONLINE=0
 RUN_CONFIG=0
+RUN_NON_INTERACTIVE=0
 
 # Default to all tests if no arguments
 if [ $# -eq 0 ]; then
@@ -29,8 +30,9 @@ if [ $# -eq 0 ]; then
     RUN_WEB=1
     RUN_ONLINE=1
     RUN_CONFIG=1
+    RUN_NON_INTERACTIVE=1
     echo "Running all tests (use './test.sh <test-names>' to run specific tests)"
-    echo "Available tests: unit comprehensive install logging web online config"
+    echo "Available tests: unit comprehensive install logging web online config non-interactive"
 else
     # Parse requested tests
     for arg in "$@"; do
@@ -53,12 +55,15 @@ else
             config)
                 RUN_CONFIG=1
                 ;;
+            non-interactive|noninteractive|ni)
+                RUN_NON_INTERACTIVE=1
+                ;;
             online)
                 RUN_ONLINE=1
                 ;;
             *)
                 echo "Unknown test: $arg"
-                echo "Available tests: unit comprehensive install logging web online"
+                echo "Available tests: unit comprehensive install logging web online config non-interactive"
                 exit 1
                 ;;
         esac
@@ -121,6 +126,10 @@ if command -v podman >/dev/null 2>&1; then
         TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Config Preservation Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-config.sh /tmp/test-config.sh && chmod +x /tmp/test-config.sh && cd /tmp && CMCP_CONFIG_PATH=/tmp/test-config.json CMCP_BIN=/tmp/cmcp ./test-config.sh || true"
     fi
 
+    if [ $RUN_NON_INTERACTIVE -eq 1 ]; then
+        TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Non-Interactive Mode Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-non-interactive.sh /tmp/test-non-interactive.sh && chmod +x /tmp/test-non-interactive.sh && cd /tmp && ./test-non-interactive.sh || true"
+    fi
+
     # Run tests in container with proper binary location
     podman run --rm \
         -v ./:/app:ro \
@@ -179,6 +188,10 @@ elif command -v docker >/dev/null 2>&1; then
 
     if [ $RUN_CONFIG -eq 1 ]; then
         TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Config Preservation Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-config.sh /tmp/test-config.sh && chmod +x /tmp/test-config.sh && cd /tmp && CMCP_CONFIG_PATH=/tmp/test-config.json CMCP_BIN=/tmp/cmcp ./test-config.sh || true"
+    fi
+
+    if [ $RUN_NON_INTERACTIVE -eq 1 ]; then
+        TEST_CMD="$TEST_CMD && echo '' && echo '=== Running Non-Interactive Mode Tests ===' && if [ ! -f /tmp/cmcp ]; then echo 'Building cmcp binary...' && cd /app && go build -o /tmp/cmcp; fi && cp /app/tests/test-non-interactive.sh /tmp/test-non-interactive.sh && chmod +x /tmp/test-non-interactive.sh && cd /tmp && ./test-non-interactive.sh || true"
     fi
 
     # Run tests in container with proper binary location

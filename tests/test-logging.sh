@@ -22,7 +22,8 @@ trap cleanup EXIT
 
 echo "=== Testing cmcp automatic debug logging with various failure scenarios ==="
 
-# Ensure cmcp is accessible
+# Use CMCP_BIN if provided, otherwise use ./cmcp
+CMCP="${CMCP_BIN:-./cmcp}"
 CMCP_BIN="${CMCP_BIN:-./cmcp}"
 if [ ! -x "$CMCP_BIN" ]; then
     echo "Error: cmcp binary not found at $CMCP_BIN"
@@ -78,8 +79,8 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
       "env": {}
     },
     "env-var-provided": {
-      "command": "bash",
-      "args": ["-c", "echo \"Running with API_KEY=$API_KEY\""],
+      "command": "mock-mcp-basic",
+      "args": [],
       "env": {
         "API_KEY": "test-key-12345"
       }

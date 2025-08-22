@@ -4,6 +4,18 @@
 # Tests that configuration fields (including unknown ones) are preserved
 # RUNS ONLY IN CONTAINERS - NEVER ON LOCAL SYSTEM
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="${CMCP_CONFIG_PATH:-/tmp/cmcp-test-${TEST_NAME}/config.json}"
+export TEST_DIR="${TEST_DIR:-/tmp/cmcp-test-${TEST_NAME}}"
+
+# Setup test environment
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Use CMCP_BIN if provided, otherwise use ./cmcp
+CMCP="${CMCP_BIN:-./cmcp}"
+
 # Safety check - ensure we're in a container or using test path
 echo "Debug: CMCP_CONFIG_PATH='$CMCP_CONFIG_PATH'"
 echo "Debug: Checking for /.dockerenv: $(ls -la /.dockerenv 2>&1 || echo 'not found')"
@@ -78,8 +90,8 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 EOF
 
 # Load and save config through cmcp
-echo "  Running: ${CMCP_BIN:-./cmcp} config open"
-${CMCP_BIN:-./cmcp} config open >/dev/null 2>&1 || echo "  Command exit code: $?"
+echo "  Running: $CMCP config open"
+$CMCP config open >/dev/null 2>&1 || echo "  Command exit code: $?"
 
 # Debug: Show what's in the config after operation
 echo "  Config content after operation:"
@@ -120,7 +132,7 @@ EOF
 cp "$CMCP_CONFIG_PATH" /tmp/cmcp-test-original.json
 
 # Trigger load/save
-${CMCP_BIN:-./cmcp} config open >/dev/null 2>&1 || true
+$CMCP config open >/dev/null 2>&1 || true
 
 # Check all fields are preserved
 FIELDS_OK=true
@@ -165,7 +177,7 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 EOF
 
 # Trigger load/save
-${CMCP_BIN:-./cmcp} config open >/dev/null 2>&1 || true
+$CMCP config open >/dev/null 2>&1 || true
 
 # Check known fields
 KNOWN_OK=true
@@ -213,7 +225,7 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 EOF
 
 # Trigger load/save
-${CMCP_BIN:-./cmcp} config open >/dev/null 2>&1 || true
+$CMCP config open >/dev/null 2>&1 || true
 
 # Check that empty values are handled correctly
 EMPTY_OK=true
@@ -279,7 +291,7 @@ EOF
 ORIGINAL_HASH=$(jq -S '.mcpServers."complex-server"' "$CMCP_CONFIG_PATH" | sha256sum | cut -d' ' -f1)
 
 # Trigger load/save
-${CMCP_BIN:-./cmcp} config open >/dev/null 2>&1 || true
+$CMCP config open >/dev/null 2>&1 || true
 
 # Get hash of the saved structure
 SAVED_HASH=$(jq -S '.mcpServers."complex-server"' "$CMCP_CONFIG_PATH" | sha256sum | cut -d' ' -f1)
@@ -318,7 +330,7 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 EOF
 
 # Trigger load/save
-${CMCP_BIN:-./cmcp} config open >/dev/null 2>&1 || true
+$CMCP config open >/dev/null 2>&1 || true
 
 # Check each server maintains its unique fields
 ALL_OK=true

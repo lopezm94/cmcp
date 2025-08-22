@@ -63,16 +63,16 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "test-server1": {
-      "command": "node",
-      "args": ["server1.js"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "test-server2": {
-      "command": "python",
-      "args": ["server2.py"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "test-server3": {
-      "command": "ruby",
-      "args": ["server3.rb"]
+      "command": "mock-mcp-basic",
+      "args": []
     }
   }
 }
@@ -122,8 +122,8 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "real-server": {
-      "command": "node",
-      "args": ["server.js"]
+      "command": "mock-mcp-basic",
+      "args": []
     }
   }
 }
@@ -165,16 +165,16 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "seq-test1": {
-      "command": "node",
-      "args": ["test1.js"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "seq-test2": {
-      "command": "python",
-      "args": ["test2.py"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "seq-test3": {
-      "command": "ruby",
-      "args": ["test3.rb"]
+      "command": "mock-mcp-basic",
+      "args": []
     }
   }
 }

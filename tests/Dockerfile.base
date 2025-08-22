@@ -1,0 +1,21 @@
+FROM golang:1.21-alpine
+
+# Install required packages
+RUN apk add --no-cache bash expect jq curl nodejs npm git sudo coreutils
+
+# Install Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Set working directory
+WORKDIR /app
+
+# Create non-root user for testing (some tests may need this)
+RUN adduser -D testuser
+
+# Ensure Go is in PATH
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+# Set up environment
+ENV HOME="/root"
+
+CMD ["/bin/bash"]

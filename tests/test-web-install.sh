@@ -13,6 +13,9 @@ export TEST_DIR="/tmp/cmcp-test-${TEST_NAME}"
 mkdir -p "$TEST_DIR"
 mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
 
+# Use CMCP_BIN if provided, otherwise use ./cmcp
+CMCP="${CMCP_BIN:-./cmcp}"
+
 # Cleanup on exit
 cleanup() {
     rm -rf "$TEST_DIR"

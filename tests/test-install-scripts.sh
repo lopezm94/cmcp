@@ -4,6 +4,18 @@
 # Don't exit on error - we want to run all tests
 set +e
 
+# Auto-generate unique paths based on script name
+TEST_NAME=$(basename "$0" .sh | sed 's/^test-//')
+export CMCP_CONFIG_PATH="${CMCP_CONFIG_PATH:-/tmp/cmcp-test-${TEST_NAME}/config.json}"
+export TEST_DIR="${TEST_DIR:-/tmp/cmcp-test-${TEST_NAME}}"
+
+# Setup test environment
+mkdir -p "$TEST_DIR"
+mkdir -p "$(dirname "$CMCP_CONFIG_PATH")"
+
+# Use CMCP_BIN if provided, otherwise use ./cmcp
+CMCP="${CMCP_BIN:-./cmcp}"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

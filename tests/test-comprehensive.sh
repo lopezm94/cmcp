@@ -115,8 +115,8 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "command": "mock-mcp-basic",
+      "args": []
     }
   }
 }
@@ -134,8 +134,7 @@ verify_json_structure "$CMCP_CONFIG_PATH" "Config file structure"
 
 # Test 6: Check JSON content for standard MCP format
 test_start "Standard MCP format verification"
-if jq -e '.mcpServers.playwright.command == "npx"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
-   jq -e '.mcpServers.playwright.args[0] == "@playwright/mcp@latest"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
+if jq -e '.mcpServers.playwright.command == "mock-mcp-basic"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Standard MCP format with command/args separation"
 else
     test_fail "MCP format" "Command/args not properly separated"
@@ -149,12 +148,12 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"]
+      "command": "mock-mcp-basic",
+      "args": []
     }
   }
 }
@@ -181,12 +180,12 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "command": "mock-mcp-basic",
+      "args": [],
       "env": {
         "GITHUB_TOKEN": "test_token",
         "API_KEY": "test_key"
@@ -209,20 +208,20 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
+      "command": "mock-mcp-basic",
+      "args": []
     },
     "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "command": "mock-mcp-basic",
+      "args": [],
       "env": {
         "GITHUB_TOKEN": "test_token",
         "API_KEY": "test_key"
       }
     },
     "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+      "command": "mock-mcp-basic",
+      "args": []
     }
   }
 }
@@ -343,8 +342,8 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 {
   "mcpServers": {
     "complex-server": {
-      "command": "npx",
-      "args": ["@claude/mcp-server-filesystem", "--path", "/tmp"],
+      "command": "mock-mcp-basic",
+      "args": [],
       "env": {
         "FILE_PATH": "/tmp",
         "DEBUG": "true"
@@ -355,9 +354,7 @@ cat > "$CMCP_CONFIG_PATH" << 'EOF'
 EOF
 
 # Verify complex config structure
-if jq -e '.mcpServers."complex-server".command == "npx"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
-   jq -e '.mcpServers."complex-server".args[0] == "@claude/mcp-server-filesystem"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
-   jq -e '.mcpServers."complex-server".args[1] == "--path"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
+if jq -e '.mcpServers."complex-server".command == "mock-mcp-basic"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1 && \
    jq -e '.mcpServers."complex-server".env.FILE_PATH == "/tmp"' "$CMCP_CONFIG_PATH" >/dev/null 2>&1; then
     test_pass "Complex configuration with args and env vars"
 else

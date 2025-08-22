@@ -98,15 +98,68 @@ Uses standard MCP server configuration format:
 }
 ```
 
-## Testing Strategy
+## Test Architecture
+
+### Overview
+Tests run in Docker/Podman containers for isolation and consistency. The architecture optimizes for speed through parallel execution and Docker image caching.
+
+### Performance
+- **First run**: ~45-60 seconds (builds base image)
+- **Subsequent runs**: ~12 seconds (uses cached image)
+- **Parallel execution**: Tests that don't conflict run simultaneously
+- **Mock servers**: Fast Go-based mocks replace slow npm/python/ruby servers
+
+### Directory Structure
+```
+tests/
+├── claude-parallel/       # Tests that can run simultaneously
+├── claude-contention/     # Tests that must run one at a time  
+├── mock-servers/          # Fast mock MCP servers in Go
+├── parallel-runner.sh     # Dynamic test orchestrator
+├── manage-image.sh        # Docker image management
+├── Dockerfile.base        # Base image with dependencies only
+└── CLAUDE.md              # Detailed test architecture and contention docs
+```
+
+See `tests/CLAUDE.md` for detailed explanation of test categorization and contention management.
+
+### Key Components
+
+**test.sh**: Main entry point
+- Accepts test paths: `./test.sh tests/claude-parallel/test-config.sh`
+- Uses `manage-image.sh` to ensure base image exists
+- Mounts source code as volume (no rebuilds needed)
+
+**parallel-runner.sh**: Test orchestrator
+- Automatically discovers tests in claude-parallel/ and claude-contention/
+- Phase 1: Runs parallel tests simultaneously
+- Phase 2: Runs sequential tests one at a time with Claude state cleanup
+
+**Dockerfile.base**: Cached dependencies
+- Contains all tools (Go, Node, npm, Claude CLI)
+- Built once, reused for all test runs
+- Source code mounted at runtime
+
+### Test Categories
+
+**Parallel-safe** (claude-parallel/):
+- Don't use Claude CLI commands
+- Don't modify system files
+- Can run simultaneously
+
+**Sequential** (claude-contention/):
+- Use Claude CLI (modifies ~/.claude.json)
+- Install to system directories
+- Must run one at a time
+
+### Testing Strategy
 
 - **Unit Tests**: Test individual components (claude_cmd_builder_test.go, security_test.go, diagnostics_test.go)
 - **Integration Tests**: Run in containers to test full command flow
 - **Install Tests**: Verify installation/uninstall scripts work correctly
 - **Never read sensitive files**: Ensure you are not reading files from `~/.cmcp/config.json` or any other sensitive files in the user's computer, unless explicitly allowed by the user or if isolated in a container or similar.
-- **Test Isolation**: 
-  * Everytime a new test is added, it must run inside a docker container (or isolated environment)
-  * All new tests must be added to the `test.sh` file to ensure consistent test execution
+- **Test Isolation**: All tests run in Docker/Podman containers with tmpfs mounts
+- **Contention Management**: See `tests/CLAUDE.md` for detailed explanation of how tests avoid conflicts
 
 ## Important Notes
 
@@ -133,3 +186,6 @@ Uses standard MCP server configuration format:
 # UNSAFE - DO NOT RUN
 go test ./internal/config  # This could damage local config!
 ```
+- You shouldn't execute the web install test script cause it overrides my current installation. That's what the podman is for
+- Remember not to commit anything unless all tests pass successfully, no failing tests allowed when committing unless explicitly specified by the user
+- Always run the tests inside a container, to avoid messing up my local config for my personal cmcp, that's what the test shell scripts are for
